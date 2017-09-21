@@ -20,7 +20,9 @@
 package com.orientechnologies.orient.server.distributed.impl.task;
 
 import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.serialization.OStreamable;
+import com.orientechnologies.orient.core.serialization.serializer.record.binary.ORecordSerializerNetworkV37;
 import com.orientechnologies.orient.server.distributed.impl.task.transaction.*;
 
 import java.io.DataInput;
@@ -58,14 +60,28 @@ public class OTransactionPhase1TaskResult implements OStreamable {
     case OTxException.ID:
       throw new UnsupportedOperationException(); //TODO!
     case OTxUniqueIndex.ID:
-      throw new UnsupportedOperationException(); //TODO!
+      OTxUniqueIndex pl2 = (OTxUniqueIndex) resultPayload;
+      //RID
+      out.writeInt(pl2.getRecordId().getClusterId());
+      out.writeLong(pl2.getRecordId().getClusterPosition());
+      //index name
+      byte[] indexNameBytes = pl2.getIndex().getBytes();
+      out.writeInt(indexNameBytes.length);
+      out.write(indexNameBytes);
+      //index key
+      OType type = OType.getTypeByValue(pl2.getKey());
+      int typeId = type.getId();
+      out.writeInt(typeId);
+      byte[] value = ORecordSerializerNetworkV37.INSTANCE.serializeValue(pl2.getKey(), type);
+      out.writeInt(value.length);
+      out.write(value);
     }
   }
 
   @Override
   public void fromStream(final DataInput in) throws IOException {
     int type = in.readInt();
-    switch (resultPayload.getResponseType()) {
+    switch (type) {
     case OTxSuccess.ID:
       this.resultPayload = new OTxSuccess();
       break;
@@ -80,7 +96,22 @@ public class OTransactionPhase1TaskResult implements OStreamable {
     case OTxException.ID:
       throw new UnsupportedOperationException(); //TODO!
     case OTxUniqueIndex.ID:
-      throw new UnsupportedOperationException(); //TODO!
+      //RID
+      ORecordId id2 = new ORecordId(in.readInt(), in.readLong());
+      //index name
+      int arraySize = in.readInt();
+      byte[] indexBytes = new byte[arraySize];
+      in.readFully(indexBytes);
+      String indexName = new String(indexBytes);
+      //index key
+      int keyTypeId = in.readInt();
+      int keySize = in.readInt();
+      byte[] keyBytes = new byte[keySize];
+      in.readFully(keyBytes);
+      OType keyType = OType.getById((byte) keyTypeId);
+      Object key = ORecordSerializerNetworkV37.INSTANCE.deserializeValue(keyBytes, keyType);
+      //instantiate payload
+      this.resultPayload = new OTxUniqueIndex(id2, indexName, key);
     }
   }
 
