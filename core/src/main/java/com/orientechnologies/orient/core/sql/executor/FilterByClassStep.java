@@ -1,6 +1,7 @@
 package com.orientechnologies.orient.core.sql.executor;
 
 import com.orientechnologies.common.concur.OTimeoutException;
+import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
@@ -16,6 +17,8 @@ public class FilterByClassStep extends AbstractExecutionStep {
   private OIdentifier identifier;
 
   OResultSet prevResult = null;
+
+  private long cost;
 
   public FilterByClassStep(OIdentifier identifier, OCommandContext ctx, boolean profilingEnabled) {
     super(ctx, profilingEnabled);
@@ -56,13 +59,20 @@ public class FilterByClassStep extends AbstractExecutionStep {
             }
           }
           nextItem = prevResult.next();
-          if (nextItem.isElement()) {
-            Optional<OClass> clazz = nextItem.getElement().get().getSchemaType();
-            if (clazz.isPresent() && clazz.get().isSubClassOf(identifier.getStringValue())) {
-              break;
+          long begin = profilingEnabled ? System.nanoTime() : 0;
+          try {
+            if (nextItem.isElement()) {
+              Optional<OClass> clazz = nextItem.getElement().get().getSchemaType();
+              if (clazz.isPresent() && clazz.get().isSubClassOf(identifier.getStringValue())) {
+                break;
+              }
+            }
+            nextItem = null;
+          } finally {
+            if (profilingEnabled) {
+              cost += (System.nanoTime() - begin);
             }
           }
-          nextItem = null;
         }
       }
 
@@ -120,8 +130,17 @@ public class FilterByClassStep extends AbstractExecutionStep {
 
   @Override
   public String prettyPrint(int depth, int indent) {
-    return OExecutionStepInternal.getIndent(depth, indent) + "+ FILTER ITEMS BY CLASS \n" + OExecutionStepInternal
-        .getIndent(depth, indent) + "  " + identifier.getStringValue();
+    StringBuilder result = new StringBuilder();
+    result.append(OExecutionStepInternal.getIndent(depth, indent));
+    result.append("+ FILTER ITEMS BY CLASS");
+    if (profilingEnabled) {
+      result.append(" (" + getCostFormatted() + ")");
+    }
+    result.append(" \n");
+    result.append(OExecutionStepInternal.getIndent(depth, indent));
+    result.append("  ");
+    result.append(identifier.getStringValue());
+    return result.toString();
   }
 
   @Override
@@ -138,7 +157,12 @@ public class FilterByClassStep extends AbstractExecutionStep {
       OExecutionStepInternal.basicDeserialize(fromResult, this);
       identifier = OIdentifier.deserialize(fromResult.getProperty("identifier"));
     } catch (Exception e) {
-      throw new OCommandExecutionException("");
+      throw OException.wrapException(new OCommandExecutionException(""), e);
     }
+  }
+
+  @Override
+  public long getCost() {
+    return cost;
   }
 }

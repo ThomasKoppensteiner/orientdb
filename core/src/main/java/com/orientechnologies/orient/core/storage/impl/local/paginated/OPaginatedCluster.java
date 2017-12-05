@@ -152,6 +152,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
     }
   }
 
+  @Override
   public boolean exists() {
     startOperation();
     try {
@@ -288,6 +289,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
     close(true);
   }
 
+  @Override
   public void close(final boolean flush) throws IOException {
     startOperation();
     try {
@@ -371,7 +373,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
             throw new IllegalArgumentException(
                 "Cannot change encryption setting on cluster '" + getName() + "' because it is not empty");
           setEncryptionInternal(stringValue,
-              ODatabaseRecordThreadLocal.INSTANCE.get().getStorage().getConfiguration().getContextConfiguration()
+              ODatabaseRecordThreadLocal.instance().get().getStorage().getConfiguration().getContextConfiguration()
                   .getValueAsString(OGlobalConfiguration.STORAGE_ENCRYPTION_KEY));
           break;
         default:
@@ -437,16 +439,14 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
   public OPhysicalPosition allocatePosition(byte recordType) throws IOException {
     startOperation();
     try {
-      startAtomicOperation(true);
+      OAtomicOperation atomicOperation = startAtomicOperation(true);
       acquireExclusiveLock();
       try {
         final OPhysicalPosition pos = createPhysicalPosition(recordType, clusterPositionMap.allocate(), -1);
+        addAtomicOperationMetadata(new ORecordId(id, pos.clusterPosition), atomicOperation);
         endAtomicOperation(false, null);
         return pos;
-      } catch (IOException e) {
-        endAtomicOperation(true, e);
-        throw e;
-      } catch (RuntimeException e) {
+      } catch (IOException | RuntimeException e) {
         endAtomicOperation(true, e);
         throw e;
       } finally {
@@ -457,6 +457,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
     }
   }
 
+  @Override
   public OPhysicalPosition createRecord(byte[] content, final int recordVersion, final byte recordType,
       OPhysicalPosition allocatedPosition) throws IOException {
     startOperation();
@@ -634,6 +635,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
     return entryContentLength;
   }
 
+  @Override
   @SuppressFBWarnings(value = "PZLA_PREFER_ZERO_LENGTH_ARRAYS")
   public ORawBuffer readRecord(final long clusterPosition, boolean prefetchRecords) throws IOException {
     int pagesToPrefetch = 1;
@@ -666,7 +668,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
           if (getFilledUpTo(atomicOperation, fileId) <= pageIndex)
             return null;
 
-          int recordVersion = 0;
+          int recordVersion;
           final OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, pageIndex, false, pageCount);
           try {
             final OClusterPage localPage = new OClusterPage(cacheEntry, false);
@@ -733,7 +735,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
             throw new ORecordNotFoundException(new ORecordId(id, clusterPosition),
                 "Record for cluster with id " + id + " and position " + clusterPosition + " is absent.");
 
-          int loadedRecordVersion = 0;
+          int loadedRecordVersion;
 
           OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, pageIndex, false);
           try {
@@ -762,6 +764,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
     }
   }
 
+  @Override
   public boolean deleteRecord(long clusterPosition) throws IOException {
     startOperation();
     OSessionStoragePerformanceStatistic statistic = performanceStatisticManager.getSessionPerformanceStatistic();
@@ -843,10 +846,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
         endAtomicOperation(false, null);
 
         return true;
-      } catch (IOException e) {
-        endAtomicOperation(true, e);
-        throw OException.wrapException(new OPaginatedClusterException("Error during record deletion", this), e);
-      } catch (RuntimeException e) {
+      } catch (IOException | RuntimeException e) {
         endAtomicOperation(true, e);
         throw OException.wrapException(new OPaginatedClusterException("Error during record deletion", this), e);
       } finally {
@@ -900,6 +900,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
     }
   }
 
+  @Override
   public void updateRecord(final long clusterPosition, byte[] content, final int recordVersion, final byte recordType)
       throws IOException {
     startOperation();
@@ -997,7 +998,6 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
           OCacheEntry cacheEntry = loadPageForWrite(atomicOperation, fileId, nextPageIndex, false);
           if (cacheEntry == null) {
             cacheEntry = addPage(atomicOperation, fileId);
-            nextPageIndex = cacheEntry.getPageIndex();
             isNew = true;
           }
 
@@ -1148,6 +1148,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
   /**
    * Recycles a deleted record.
    */
+  @Override
   public void recycleRecord(final long clusterPosition, byte[] content, final int recordVersion, final byte recordType)
       throws IOException {
     startOperation();
@@ -1222,8 +1223,6 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
             long firstPageIndex = -1;
             int firstPagePosition = -1;
 
-            int version = 0;
-
             int from = 0;
             int to = from + (OClusterPage.MAX_RECORD_SIZE - OByteSerializer.BYTE_SIZE - OLongSerializer.LONG_SIZE);
 
@@ -1246,7 +1245,6 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
               if (firstPageIndex == -1) {
                 firstPageIndex = addEntryResult.pageIndex;
                 firstPagePosition = addEntryResult.pagePosition;
-                version = addEntryResult.recordVersion;
               }
 
               long addedPagePointer = createPagePointer(addEntryResult.pageIndex, addEntryResult.pagePosition);
@@ -1376,6 +1374,48 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
             physicalPosition.clusterPosition = position.clusterPosition;
 
             return physicalPosition;
+          } finally {
+            releasePageFromRead(atomicOperation, cacheEntry);
+          }
+        } finally {
+          releaseSharedLock();
+        }
+      } finally {
+        atomicOperationsManager.releaseReadLock(this);
+      }
+    } finally {
+      completeOperation();
+    }
+  }
+
+  @Override
+  public boolean isDeleted(OPhysicalPosition position) throws IOException {
+    startOperation();
+    try {
+      atomicOperationsManager.acquireReadLock(this);
+      try {
+        acquireSharedLock();
+        try {
+          long clusterPosition = position.clusterPosition;
+          OClusterPositionMapBucket.PositionEntry positionEntry = clusterPositionMap.get(clusterPosition, 1);
+
+          if (positionEntry == null)
+            return false;
+
+          OAtomicOperation atomicOperation = atomicOperationsManager.getCurrentOperation();
+          long pageIndex = positionEntry.getPageIndex();
+          int recordPosition = positionEntry.getRecordPosition();
+
+          long pagesCount = getFilledUpTo(atomicOperation, fileId);
+          if (pageIndex >= pagesCount)
+            return false;
+
+          OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, pageIndex, false);
+          try {
+            final OClusterPage localPage = new OClusterPage(cacheEntry, false);
+            if (localPage.isDeleted(recordPosition))
+              return true;
+            return false;
           } finally {
             releasePageFromRead(atomicOperation, cacheEntry);
           }
@@ -1664,6 +1704,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
     }
   }
 
+  @Override
   public ORecordConflictStrategy getRecordConflictStrategy() {
     return recordConflictStrategy;
   }
@@ -1771,7 +1812,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
     if (getFilledUpTo(atomicOperation, fileId) <= pageIndex)
       return null;
 
-    final List<byte[]> recordChunks = new ArrayList<byte[]>();
+    final List<byte[]> recordChunks = new ArrayList<>();
     int contentSize = 0;
 
     long nextPagePointer;
@@ -2104,7 +2145,7 @@ public class OPaginatedCluster extends ODurableComponent implements OCluster {
         return debug;
       }
 
-      debug.pages = new ArrayList<OClusterPageDebug>();
+      debug.pages = new ArrayList<>();
       int contentSize = 0;
 
       long nextPagePointer;

@@ -100,7 +100,8 @@ public class OMemoryWriteAheadLog extends OAbstractWriteAheadLog {
   }
 
   @Override
-  public void cutTill(OLogSequenceNumber lsn) throws IOException {
+  public boolean cutTill(OLogSequenceNumber lsn) throws IOException {
+    return false;
   }
 
   @Override
@@ -116,7 +117,13 @@ public class OMemoryWriteAheadLog extends OAbstractWriteAheadLog {
   }
 
   @Override
-  public void preventCutTill(OLogSequenceNumber lsn) throws IOException {
+  public void addCutTillLimit(OLogSequenceNumber lsn) {
+
+  }
+
+  @Override
+  public void removeCutTillLimit(OLogSequenceNumber lsn) {
+
   }
 
   @Override
@@ -132,10 +139,6 @@ public class OMemoryWriteAheadLog extends OAbstractWriteAheadLog {
   @Override
   public long activeSegment() {
     return 0;
-  }
-
-  @Override
-  public void newSegment() throws IOException {
   }
 
   @Override
@@ -160,4 +163,8 @@ public class OMemoryWriteAheadLog extends OAbstractWriteAheadLog {
     event.run();
   }
 
+  @Override
+  public boolean appendNewSegment() {
+    return false;
+  }
 }

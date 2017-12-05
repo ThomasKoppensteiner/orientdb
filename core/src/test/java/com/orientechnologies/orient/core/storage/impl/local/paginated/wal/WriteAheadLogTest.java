@@ -1,9 +1,12 @@
 package com.orientechnologies.orient.core.storage.impl.local.paginated.wal;
 
+import com.orientechnologies.common.io.OFileUtils;
 import com.orientechnologies.common.serialization.types.OIntegerSerializer;
 import com.orientechnologies.common.serialization.types.OLongSerializer;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
+import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.OLocalPaginatedStorage;
+import com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations.OAtomicOperationMetadata;
 import com.orientechnologies.orient.core.storage.impl.local.statistic.OPerformanceStatisticManager;
 import org.junit.*;
 
@@ -33,9 +36,8 @@ public class WriteAheadLogTest {
       buildDirectory = ".";
 
     testDir = new File(buildDirectory, "writeAheadLogTest");
-    if (!testDir.exists())
-      Assert.assertTrue(testDir.mkdir());
-
+    OFileUtils.deleteRecursively(testDir);
+    Assert.assertTrue(testDir.mkdir());
     OWALRecordsFactory.INSTANCE.registerNewRecord((byte) 128, TestRecord.class);
   }
 
@@ -65,12 +67,18 @@ public class WriteAheadLogTest {
   public void afterMethod() throws Exception {
     if (writeAheadLog != null)
       writeAheadLog.delete();
+
+    final File[] files = testDir.listFiles();
+    if (files != null) {
+      for (File file : files) {
+        OFileUtils.deleteRecursively(file);
+      }
+    }
   }
 
   @AfterClass
   public static void afterClass() {
-    if (testDir.exists())
-      Assert.assertTrue(testDir.delete());
+    OFileUtils.deleteRecursively(testDir);
   }
 
   @Test
@@ -699,6 +707,105 @@ public class WriteAheadLogTest {
     Assert.assertEquals(writeAheadLog.size(), duration);
 
     assertLogContent(writeAheadLog, writtenRecords);
+  }
+
+  @Test
+  public void testCutTillLimits() throws IOException {
+    long nextStart = 0;
+
+    for (int n = 0; n < 3; n++) {
+      for (int i = 0; i < SEGMENT_SIZE / OWALPage.PAGE_SIZE; i++) {
+        TestRecord walRecord = new TestRecord(nextStart, SEGMENT_SIZE, OWALPage.PAGE_SIZE, false, false);
+        writeAheadLog.log(walRecord);
+        nextStart = walRecord.nextStart;
+      }
+
+      TestRecord walRecord = new TestRecord(nextStart, SEGMENT_SIZE, OWALPage.PAGE_SIZE, false, false);
+      writeAheadLog.log(walRecord);
+    }
+
+    try {
+      writeAheadLog.addCutTillLimit(null);
+      Assert.fail();
+    } catch (NullPointerException npe) {
+      Assert.assertTrue(true);
+    }
+
+    try {
+      writeAheadLog.removeCutTillLimit(null);
+      Assert.fail();
+    } catch (NullPointerException npe) {
+      Assert.assertTrue(true);
+    }
+
+    final OLogSequenceNumber end = writeAheadLog.end();
+    final OLogSequenceNumber begin = writeAheadLog.begin();
+
+    writeAheadLog.addCutTillLimit(new OLogSequenceNumber(25, 25));
+    writeAheadLog.addCutTillLimit(new OLogSequenceNumber(25, 25));
+
+    writeAheadLog.addCutTillLimit(new OLogSequenceNumber(0, 0));
+    writeAheadLog.addCutTillLimit(new OLogSequenceNumber(0, 0));
+    writeAheadLog.addCutTillLimit(new OLogSequenceNumber(0, 0));
+
+    writeAheadLog.addCutTillLimit(new OLogSequenceNumber(1, 10));
+
+    writeAheadLog.addCutTillLimit(new OLogSequenceNumber(2, 10));
+    writeAheadLog.addCutTillLimit(new OLogSequenceNumber(2, 10));
+
+    writeAheadLog.cutTill(new OLogSequenceNumber(3, 0));
+
+    Assert.assertEquals(writeAheadLog.end(), end);
+    Assert.assertEquals(writeAheadLog.begin(), begin);
+
+    writeAheadLog.removeCutTillLimit(new OLogSequenceNumber(0, 0));
+    writeAheadLog.cutTill(new OLogSequenceNumber(3, 0));
+
+    Assert.assertEquals(writeAheadLog.end(), end);
+    Assert.assertEquals(writeAheadLog.begin(), begin);
+
+    writeAheadLog.removeCutTillLimit(new OLogSequenceNumber(0, 0));
+    writeAheadLog.cutTill(new OLogSequenceNumber(3, 0));
+    Assert.assertEquals(writeAheadLog.end(), end);
+    Assert.assertEquals(writeAheadLog.begin(), begin);
+
+    writeAheadLog.removeCutTillLimit(new OLogSequenceNumber(1, 10));
+    writeAheadLog.cutTill(new OLogSequenceNumber(3, 0));
+    Assert.assertEquals(writeAheadLog.end(), end);
+    Assert.assertEquals(writeAheadLog.begin(), begin);
+
+    writeAheadLog.removeCutTillLimit(new OLogSequenceNumber(0, 0));
+    writeAheadLog.cutTill(new OLogSequenceNumber(3, 0));
+    Assert.assertEquals(writeAheadLog.end(), end);
+    Assert.assertEquals(writeAheadLog.begin().getSegment(), 2);
+
+    writeAheadLog.removeCutTillLimit(new OLogSequenceNumber(2, 10));
+    writeAheadLog.cutTill(new OLogSequenceNumber(3, 0));
+    Assert.assertEquals(writeAheadLog.end(), end);
+    Assert.assertEquals(writeAheadLog.begin().getSegment(), 2);
+
+    try {
+      writeAheadLog.removeCutTillLimit(new OLogSequenceNumber(2, 1));
+      Assert.fail();
+    } catch (IllegalArgumentException e) {
+      Assert.assertTrue(true);
+    }
+
+    writeAheadLog.removeCutTillLimit(new OLogSequenceNumber(2, 10));
+    writeAheadLog.cutTill(new OLogSequenceNumber(3, 0));
+    Assert.assertEquals(writeAheadLog.end(), end);
+    Assert.assertEquals(writeAheadLog.begin().getSegment(), 3);
+
+    writeAheadLog.removeCutTillLimit(new OLogSequenceNumber(25, 25));
+    writeAheadLog.removeCutTillLimit(new OLogSequenceNumber(25, 25));
+
+    try {
+      writeAheadLog.removeCutTillLimit(new OLogSequenceNumber(25, 25));
+      Assert.fail();
+    } catch (IllegalArgumentException iae) {
+      Assert.assertTrue(true);
+    }
+
   }
 
   @Test
@@ -2226,6 +2333,69 @@ public class WriteAheadLogTest {
     Assert.assertEquals(startLSN, lsn);
     Assert.assertEquals(writeAheadLog.end(), lsn);
     Assert.assertEquals(writeAheadLog.size(), OWALPage.PAGE_SIZE / 2);
+  }
+
+  @Test
+  public void testEmptyWalCannotBeAppended() {
+    Assert.assertFalse(writeAheadLog.appendNewSegment());
+  }
+
+  @Test
+  public void appendIsNotAllowedWithOnGoingOperations() throws Exception {
+    final OOperationUnitId operationUnitId = OOperationUnitId.generateId();
+
+    writeAheadLog.logAtomicOperationStartRecord(false, operationUnitId);
+    try {
+      writeAheadLog.appendNewSegment();
+      Assert.fail();
+    } catch (OStorageException ose) {
+      Assert.assertTrue(true);
+    }
+
+    OLogSequenceNumber endLsn = writeAheadLog.logAtomicOperationEndRecord(operationUnitId, false, new OLogSequenceNumber(0, 0),
+        Collections.<String, OAtomicOperationMetadata<?>>emptyMap());
+
+    Assert.assertTrue(writeAheadLog.appendNewSegment());
+
+    OLogSequenceNumber lsn = writeAheadLog.log(new TestRecord(0, SEGMENT_SIZE, 100, false, true));
+
+    Assert.assertEquals(writeAheadLog.end(), lsn);
+    Assert.assertEquals(endLsn.getSegment() + 1, lsn.getSegment());
+  }
+
+  @Test
+  public void emptySegmentNoOpOnAppend() throws Exception {
+    OLogSequenceNumber lsn = writeAheadLog.log(new TestRecord(0, SEGMENT_SIZE, SEGMENT_SIZE, false, false));
+
+    final List<String> walFiles = writeAheadLog.getWalFiles();
+    Assert.assertEquals(2, walFiles.size());
+
+    Assert.assertFalse(writeAheadLog.appendNewSegment());
+
+    Assert.assertEquals(walFiles, writeAheadLog.getWalFiles());
+    OLogSequenceNumber appLsn = writeAheadLog.log(new TestRecord(0, 100, SEGMENT_SIZE, true, false));
+
+    Assert.assertEquals(lsn.getSegment() + 1, appLsn.getSegment());
+
+  }
+
+  @Test
+  public void testAppendSegment() throws Exception {
+    long nextStart = 0;
+
+    for (int i = 0; i < 10; i++) {
+      TestRecord walRecord = new TestRecord(nextStart, SEGMENT_SIZE, 512, false, true);
+      writeAheadLog.log(walRecord);
+    }
+
+    OLogSequenceNumber end = writeAheadLog.end();
+    Assert.assertTrue(writeAheadLog.appendNewSegment());
+
+    TestRecord walRecord = new TestRecord(0, SEGMENT_SIZE, 512, false, true);
+    writeAheadLog.log(walRecord);
+
+    Assert.assertEquals(writeAheadLog.end(), walRecord.getLsn());
+    Assert.assertEquals(end.getSegment() + 1, walRecord.lsn.getSegment());
   }
 
   private void assertLogContent(ODiskWriteAheadLog writeAheadLog, List<? extends OWALRecord> writtenRecords) throws Exception {

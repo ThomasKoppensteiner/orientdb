@@ -39,7 +39,6 @@ import com.orientechnologies.orient.core.db.ODatabaseDocumentInternal;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
-import com.orientechnologies.orient.core.db.record.ridbag.sbtree.OSBTreeCollectionManager;
 import com.orientechnologies.orient.core.exception.OCoreException;
 import com.orientechnologies.orient.core.exception.ODatabaseException;
 import com.orientechnologies.orient.core.exception.OSecurityAccessException;
@@ -54,6 +53,7 @@ import com.orientechnologies.orient.core.serialization.serializer.record.ORecord
 import com.orientechnologies.orient.core.serialization.serializer.record.OSerializationThreadLocal;
 import com.orientechnologies.orient.core.serialization.serializer.record.binary.ORecordSerializerNetworkFactory;
 import com.orientechnologies.orient.core.serialization.serializer.record.string.ORecordSerializerSchemaAware2CSV;
+import com.orientechnologies.orient.core.storage.ridbag.sbtree.OSBTreeCollectionManager;
 import com.orientechnologies.orient.enterprise.channel.binary.*;
 import com.orientechnologies.orient.server.OClientConnection;
 import com.orientechnologies.orient.server.OConnectionBinaryExecutor;
@@ -106,9 +106,6 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
 
   /**
    * Internal varialbe injection useful for testing.
-   *
-   * @param server
-   * @param channel
    */
   public void initVariables(final OServer server, OChannelBinary channel) {
     this.server = server;
@@ -155,7 +152,7 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
   protected void execute() throws Exception {
     requestType = -1;
 
-    if(server.rejectRequests()){
+    if (server.rejectRequests()) {
       this.softShutdown();
       return;
     }
@@ -316,10 +313,10 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
             afterOperationRequest(connection);
           }
         }
-        if(connection!= null)
+        if (connection != null)
           tokenConnection = Boolean.TRUE.equals(connection.getTokenBased());
       } else {
-        OLogManager.instance().error(this, "Request not supported. Code: " + requestType);
+        OLogManager.instance().error(this, "Request not supported. Code: " + requestType, null);
         handleConnectionError(connection, new ONetworkProtocolException("Request not supported. Code: " + requestType));
         sendShutdown();
       }
@@ -364,7 +361,7 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
     } catch (RuntimeException e) {
       if (connection != null)
         server.getClientConnectionManager().disconnect(connection);
-      ODatabaseRecordThreadLocal.INSTANCE.remove();
+      ODatabaseRecordThreadLocal.instance().remove();
       throw e;
     }
 
@@ -398,7 +395,7 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
         afterOperationRequest(connection);
       }
 
-    } catch (Throwable t) {
+    } catch (Exception t) {
       // IN CASE OF DISTRIBUTED ANY EXCEPTION AT THIS POINT CAUSE THIS CONNECTION TO CLOSE
       OLogManager.instance().warn(this, "I/O Error on distributed channel  clientId=%d reqType=%d", clientTxId, requestType, t);
       sendShutdown();
@@ -446,7 +443,7 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
     } catch (RuntimeException e) {
       if (connection != null)
         server.getClientConnectionManager().disconnect(connection);
-      ODatabaseRecordThreadLocal.INSTANCE.remove();
+      ODatabaseRecordThreadLocal.instance().remove();
       throw e;
     }
     return connection;
@@ -465,7 +462,7 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
 
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
-          throw new OInterruptedException("Request interrupted");
+          throw OException.wrapException(new OInterruptedException("Request interrupted"), e);
         }
     }
   }
@@ -640,10 +637,10 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
       if (OLogManager.instance().isLevelEnabled(logClientExceptions)) {
         if (logClientFullStackTrace)
           OLogManager.instance().log(this, logClientExceptions, "Sent run-time exception to the client %s: %s", t,
-              channel.socket.getRemoteSocketAddress(), t.toString());
+              true, null, channel.socket.getRemoteSocketAddress(), t.toString());
         else
           OLogManager.instance().log(this, logClientExceptions, "Sent run-time exception to the client %s: %s", null,
-              channel.socket.getRemoteSocketAddress(), t.toString());
+              true, null, channel.socket.getRemoteSocketAddress(), t.toString());
       }
     } catch (Exception e) {
       if (e instanceof SocketException)
@@ -726,11 +723,7 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
    * - 4 bytes: record version <br>
    * - x bytes: record content <br>
    *
-   * @param channel    TODO
-   * @param connection
-   * @param o
-   *
-   * @throws IOException
+   * @param channel TODO
    */
   public static void writeIdentifiable(OChannelBinary channel, OClientConnection connection, final OIdentifiable o)
       throws IOException {
@@ -762,7 +755,7 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
   public static byte[] getRecordBytes(OClientConnection connection, final ORecord iRecord) {
     final byte[] stream;
     String dbSerializerName = null;
-    if (ODatabaseRecordThreadLocal.INSTANCE.getIfDefined() != null)
+    if (ODatabaseRecordThreadLocal.instance().getIfDefined() != null)
       dbSerializerName = ((ODatabaseDocumentInternal) iRecord.getDatabase()).getSerializer().toString();
     String name = connection.getData().getSerializationImpl();
     if (ORecordInternal.getRecordType(iRecord) == ODocument.RECORD_TYPE && (dbSerializerName == null || !dbSerializerName
@@ -798,7 +791,7 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
 
   protected static int trimCsvSerializedContent(OClientConnection connection, final byte[] stream) {
     int realLength = stream.length;
-    final ODatabaseDocumentInternal db = ODatabaseRecordThreadLocal.INSTANCE.getIfDefined();
+    final ODatabaseDocumentInternal db = ODatabaseRecordThreadLocal.instance().getIfDefined();
     if (db != null && db instanceof ODatabaseDocument) {
       if (ORecordSerializerSchemaAware2CSV.NAME.equals(connection.getData().getSerializationImpl())) {
         // TRIM TAILING SPACES (DUE TO OVERSIZE)
@@ -844,7 +837,7 @@ public class ONetworkProtocolBinary extends ONetworkProtocol {
         try {
           return pushResponse.take();
         } catch (InterruptedException e) {
-          e.printStackTrace();
+          Thread.currentThread().interrupt();
         }
       }
     } finally {

@@ -36,7 +36,7 @@ public abstract class BaseHttpDatabaseTest extends BaseHttpTest {
 
   @Before
   public void createDatabase() throws Exception {
-    ODatabaseRecordThreadLocal.INSTANCE.remove();
+    ODatabaseRecordThreadLocal.instance().remove();
 
     Assert.assertEquals(
         post("database/" + getDatabaseName() + "/memory").setUserName("root").setUserPassword("root").getResponse().getStatusLine()
@@ -58,6 +58,9 @@ public abstract class BaseHttpDatabaseTest extends BaseHttpTest {
   public static void afterTest() throws Exception {
     stopServer();
 
+    Orient.instance().shutdown();
+    Orient.instance().startup();
+
     if (oldOrientDBHome != null)
       System.setProperty("ORIENTDB_HOME", oldOrientDBHome);
     else
@@ -68,7 +71,6 @@ public abstract class BaseHttpDatabaseTest extends BaseHttpTest {
 
     File file = new File(serverHome);
     deleteDirectory(file);
-    Orient.instance().startup();
   }
 
   protected void onAfterDatabaseCreated() throws Exception {

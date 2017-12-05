@@ -70,6 +70,20 @@ public enum OGlobalConfiguration {
   MEMORY_CHUNK_SIZE("memory.chunk.size", "Size of single memory chunk (in bytes) which will be preallocated by OrientDB",
       Integer.class, Integer.MAX_VALUE),
 
+  MEMORY_LEFT_TO_OS("memory.leftToOS",
+      "Amount of free memory which should be left unallocated in case of OrientDB is started outside of container. "
+          + "Value can be set as % of total memory provided to OrientDB or as absolute value in bytes, kilobytes, megabytes or gigabytes. "
+          + "If you set value as 10% it means that 10% of memory will not be allocated by OrientDB and will be left to use by the rest of "
+          + "applications, if 2g value is provided it means that 2 gigabytes of memory will be left to use by the rest of applications. "
+          + "Default value is 2g", String.class, "2g"),
+
+  MEMORY_LEFT_TO_CONTAINER("memory.leftToContainer",
+      "Amount of free memory which should be left unallocated in case of OrientDB is started inside of container. "
+          + "Value can be set as % of total memory provided to OrientDB or as absolute value in bytes, kilobytes, megabytes or gigabytes. "
+          + "If you set value as 10% it means that 10% of memory will not be allocated by OrientDB and will be left to use by the rest of "
+          + "applications, if 2g value is provided it means that 2 gigabytes of memory will be left to use by the rest of applications. "
+          + "Default value is 256m", String.class, "256m"),
+
   DIRECT_MEMORY_SAFE_MODE("memory.directMemory.safeMode",
       "Indicates whether to perform a range check before each direct memory update. It is true by default, "
           + "but usually it can be safely set to false. It should only be to true after dramatic changes have been made in the storage structures",
@@ -78,7 +92,7 @@ public enum OGlobalConfiguration {
   DIRECT_MEMORY_TRACK_MODE("memory.directMemory.trackMode",
       "Activates the direct memory pool [leak detector](Leak-Detector.md). This detector causes a large overhead and should be used for debugging "
           + "purposes only. It's also a good idea to pass the "
-          + "-Djava.util.logging.manager=com.orientechnologies.common.log.OLogManager$DebugLogManager switch to the JVM, "
+          + "-Djava.util.logging.manager=com.orientechnologies.common.log.OLogManager$ShutdownLogManager switch to the JVM, "
           + "if you use this mode, this will enable the logging from JVM shutdown hooks.", Boolean.class, false),
 
   DIRECT_MEMORY_TRACE("memory.directMemory.trace",
@@ -125,10 +139,13 @@ public enum OGlobalConfiguration {
 
         @Override
         public void change(Object currentValue, Object newValue) {
-          final OEngineLocalPaginated engineLocalPaginated = (OEngineLocalPaginated) Orient.instance()
-              .getEngineIfRunning(OEngineLocalPaginated.NAME);
-          if (engineLocalPaginated != null)
-            engineLocalPaginated.changeCacheSize(((Integer) (newValue)) * 1024L * 1024L);
+          final Orient orient = Orient.instance();
+          if (orient != null) {
+            final OEngineLocalPaginated engineLocalPaginated = (OEngineLocalPaginated) orient
+                .getEngineIfRunning(OEngineLocalPaginated.NAME);
+            if (engineLocalPaginated != null)
+              engineLocalPaginated.changeCacheSize(((Integer) (newValue)) * 1024L * 1024L);
+          }
         }
       }),
 
@@ -380,7 +397,7 @@ public enum OGlobalConfiguration {
       "Indicates the index durability level in TX mode. Can be ROLLBACK_ONLY or FULL (ROLLBACK_ONLY by default)", String.class,
       "FULL"),
 
-  INDEX_CURSOR_PREFETCH_SIZE("index.cursor.prefetchSize", "Default prefetch size of index cursor", Integer.class, 500000),
+  INDEX_CURSOR_PREFETCH_SIZE("index.cursor.prefetchSize", "Default prefetch size of index cursor", Integer.class, 10000),
 
   // SBTREE
   SBTREE_MAX_DEPTH("sbtree.maxDepth",
@@ -456,6 +473,9 @@ public enum OGlobalConfiguration {
   NETWORK_REQUEST_TIMEOUT("network.requestTimeout", "Request completion timeout (in ms)", Integer.class, 3600000 /* one hour */,
       true),
 
+  NETWORK_SOCKET_RETRY_STRATEGY("network.retry.strategy",
+      "Select the retry server selection strategy, possible values are auto,same-dc ", String.class, "auto", true),
+
   NETWORK_SOCKET_RETRY("network.retry", "Number of attempts to connect to the server on failure", Integer.class, 5, true),
 
   NETWORK_SOCKET_RETRY_DELAY("network.retryDelay",
@@ -513,17 +533,24 @@ public enum OGlobalConfiguration {
   NETWORK_TOKEN_EXPIRE_TIMEOUT("network.token.expireTimeout",
       "Timeout, after which a binary session is considered to have expired (in minutes)", Integer.class, 60),
 
+  INIT_IN_SERVLET_CONTEXT_LISTENER("orient.initInServletContextListener",
+      "If this value set to ture (default) OrientDB engine " + "will be initialzed using embedded ServletContextListener",
+      Boolean.class, true),
+
   // PROFILER
 
   PROFILER_ENABLED("profiler.enabled", "Enables the recording of statistics and counters", Boolean.class, false,
       new OConfigurationChangeCallback() {
         public void change(final Object iCurrentValue, final Object iNewValue) {
-          final OProfiler prof = Orient.instance().getProfiler();
-          if (prof != null)
-            if ((Boolean) iNewValue)
-              prof.startRecording();
-            else
-              prof.stopRecording();
+          Orient instance = Orient.instance();
+          if (instance != null) {
+            final OProfiler prof = instance.getProfiler();
+            if (prof != null)
+              if ((Boolean) iNewValue)
+                prof.startRecording();
+              else
+                prof.stopRecording();
+          }
         }
       }),
 
@@ -540,6 +567,11 @@ public enum OGlobalConfiguration {
       Orient.instance().getProfiler().setAutoDump((Integer) iNewValue);
     }
   }),
+
+  /**
+   * @Since 2.2.27
+   */
+  PROFILER_AUTODUMP_TYPE("profiler.autoDump.type", "Type of profiler dump between 'full' or 'performance'", String.class, "full"),
 
   PROFILER_MAXVALUES("profiler.maxValues", "Maximum values to store. Values are managed in a LRU", Integer.class, 200),
 
@@ -686,7 +718,6 @@ public enum OGlobalConfiguration {
       "guarantee that the server use global context for search the database instance", Boolean.class, Boolean.TRUE, true, false),
 
   // DISTRIBUTED
-
   /**
    * @Since 2.2.18
    */
@@ -835,13 +866,13 @@ public enum OGlobalConfiguration {
    */
   @OApi(maturity = OApi.MATURITY.NEW) DISTRIBUTED_CONCURRENT_TX_MAX_AUTORETRY("distributed.concurrentTxMaxAutoRetry",
       "Maximum attempts the transaction coordinator should execute a transaction automatically, if records are locked. (Minimum is 1 = no attempts)",
-      Integer.class, 10, true),
+      Integer.class, 15, true),
 
   /**
    * @Since 2.2.7
    */
   @OApi(maturity = OApi.MATURITY.NEW) DISTRIBUTED_ATOMIC_LOCK_TIMEOUT("distributed.atomicLockTimeout",
-      "Timeout (in ms) to acquire a distributed lock on a record. (0=infinite)", Integer.class, 300, true),
+      "Timeout (in ms) to acquire a distributed lock on a record. (0=infinite)", Integer.class, 1000, true),
 
   /**
    * @Since 2.1
@@ -904,6 +935,14 @@ public enum OGlobalConfiguration {
    */
   @OApi(maturity = OApi.MATURITY.NEW) SERVER_SECURITY_FILE("server.security.file",
       "Location of the OrientDB security.json configuration file", String.class, null),
+
+  // CLOUD
+  CLOUD_PROJECT_TOKEN("cloud.project.token", "The token used to authenticate this project on the cloud platform", String.class,
+      null),
+
+  CLOUD_PROJECT_ID("cloud.project.id", "The ID used to identify this project on the cloud platform", String.class, null),
+
+  CLOUD_BASE_URL("cloud.base.url", "The base URL of the cloud endpoint for requests", String.class, null),
 
   /**
    * Deprecated in v2.2.0
@@ -1114,7 +1153,7 @@ public enum OGlobalConfiguration {
       try {
         changeCallback.change(oldValue == nullValue ? null : oldValue, value == nullValue ? null : value);
       } catch (Exception e) {
-        e.printStackTrace();
+        OLogManager.instance().error(this, "Error during call of 'change callback'", e);
       }
     }
   }

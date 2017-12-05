@@ -104,12 +104,19 @@ public class OServer {
   public OServer()
       throws ClassNotFoundException, MalformedObjectNameException, NullPointerException, InstanceAlreadyExistsException,
       MBeanRegistrationException, NotCompliantMBeanException {
-    this(true);
+    this(!Orient.instance().isInsideWebContainer());
   }
 
   public OServer(boolean shutdownEngineOnExit)
       throws ClassNotFoundException, MalformedObjectNameException, NullPointerException, InstanceAlreadyExistsException,
       MBeanRegistrationException, NotCompliantMBeanException {
+    final boolean insideWebContainer = Orient.instance().isInsideWebContainer();
+
+    if (insideWebContainer && shutdownEngineOnExit) {
+      OLogManager.instance().warnNoDb(this, "OrientDB instance is running inside of web application, "
+          + "it is highly unrecommended to force to shutdown OrientDB engine on server shutdown");
+    }
+
     this.shutdownEngineOnExit = shutdownEngineOnExit;
 
     serverRootDirectory = OSystemVariableResolver.resolveSystemVariables("${" + Orient.ORIENTDB_HOME + "}", ".");
@@ -127,7 +134,9 @@ public class OServer {
     if (OGlobalConfiguration.PROFILER_ENABLED.getValueAsBoolean() && !Orient.instance().getProfiler().isRecording())
       Orient.instance().getProfiler().startRecording();
 
-    shutdownHook = new OServerShutdownHook(this);
+    if (shutdownEngineOnExit) {
+      shutdownHook = new OServerShutdownHook(this);
+    }
   }
 
   public static OServer getInstance(final String iServerId) {
@@ -463,6 +472,10 @@ public class OServer {
         shutdownLatch.countDown();
         shutdownLatch = null;
       }
+
+      if (shutdownEngineOnExit) {
+        OLogManager.instance().shutdown();
+      }
     }
   }
 
@@ -493,7 +506,7 @@ public class OServer {
             OLogManager.instance().info(this, "- %s", l);
             try {
               l.shutdown();
-            } catch (Throwable e) {
+            } catch (Exception e) {
               OLogManager.instance().error(this, "Error during shutdown of listener %s.", e, l);
             }
           }
@@ -531,7 +544,7 @@ public class OServer {
         try {
           OLogManager.instance().info(this, "Shutting down databases:");
           Orient.instance().shutdown();
-        } catch (Throwable e) {
+        } catch (Exception e) {
           OLogManager.instance().error(this, "Error during OrientDB shutdown", e);
         }
     } finally {

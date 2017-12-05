@@ -4,7 +4,6 @@ import com.orientechnologies.orient.client.remote.OServerAdmin;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.exception.OConfigurationException;
-import com.orientechnologies.orient.core.exception.ODatabaseException;
 import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.serializer.record.ORecordSerializer;
@@ -13,6 +12,7 @@ import com.orientechnologies.orient.core.serialization.serializer.record.binary.
 import com.orientechnologies.orient.core.serialization.serializer.record.string.ORecordSerializerSchemaAware2CSV;
 import com.orientechnologies.orient.server.OServer;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -27,7 +27,7 @@ public class TestNetworkSerializerIndipendency {
 
   @Before
   public void before() throws Exception {
-    server = new OServer();
+    server = new OServer(false);
     server.setServerRootDirectory(SERVER_DIRECTORY);
     server.startup(getClass().getResourceAsStream("orientdb-server-config.xml"));
     server.activate();
@@ -47,7 +47,7 @@ public class TestNetworkSerializerIndipendency {
       ODocument document = new ODocument();
       document.field("name", "something");
       document.field("surname", "something-else");
-      document = dbTx.save(document);
+      document = dbTx.save(document, dbTx.getClusterNameById(dbTx.getDefaultClusterId()));
       dbTx.commit();
       ODocument doc = dbTx.load(document.getIdentity());
       assertEquals(doc.fields(), document.fields());
@@ -90,7 +90,7 @@ public class TestNetworkSerializerIndipendency {
       ODocument document = new ODocument();
       document.field("name", "something");
       document.field("surname", "something-else");
-      document = dbTx.save(document);
+      document = dbTx.save(document, dbTx.getClusterNameById(dbTx.getDefaultClusterId()));
       dbTx.commit();
       ODocument doc = dbTx.load(document.getIdentity());
       assertEquals(doc.fields(), document.fields());
@@ -113,6 +113,11 @@ public class TestNetworkSerializerIndipendency {
     File iDirectory = new File(SERVER_DIRECTORY);
     deleteDirectory(iDirectory);
     ODatabaseDocumentTx.setDefaultSerializer(ORecordSerializerFactory.instance().getFormat(ORecordSerializerBinary.NAME));
+  }
+
+  @AfterClass
+  public static void afterClass() {
+    Orient.instance().shutdown();
     Orient.instance().startup();
   }
 

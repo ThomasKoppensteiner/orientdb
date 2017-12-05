@@ -31,12 +31,8 @@ import com.orientechnologies.orient.core.compression.impl.OZIPCompressionUtil;
 import com.orientechnologies.orient.core.config.OContextConfiguration;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.config.OStorageConfiguration;
-import com.orientechnologies.orient.core.db.record.ridbag.sbtree.OIndexRIDContainer;
-import com.orientechnologies.orient.core.db.record.ridbag.sbtree.OSBTreeCollectionManagerShared;
 import com.orientechnologies.orient.core.engine.local.OEngineLocalPaginated;
 import com.orientechnologies.orient.core.exception.OStorageException;
-import com.orientechnologies.orient.core.index.engine.OHashTableIndexEngine;
-import com.orientechnologies.orient.core.index.engine.OSBTreeIndexEngine;
 import com.orientechnologies.orient.core.storage.OChecksumMode;
 import com.orientechnologies.orient.core.storage.cache.OReadCache;
 import com.orientechnologies.orient.core.storage.cache.local.OWOWCache;
@@ -48,6 +44,10 @@ import com.orientechnologies.orient.core.storage.impl.local.OStorageVariablePars
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.ODiskWriteAheadLog;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OLogSequenceNumber;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWriteAheadLog;
+import com.orientechnologies.orient.core.storage.index.engine.OHashTableIndexEngine;
+import com.orientechnologies.orient.core.storage.index.engine.OSBTreeIndexEngine;
+import com.orientechnologies.orient.core.storage.ridbag.sbtree.OIndexRIDContainer;
+import com.orientechnologies.orient.core.storage.ridbag.sbtree.OSBTreeCollectionManagerShared;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -200,8 +200,9 @@ public class OLocalPaginatedStorage extends OAbstractPaginatedStorage {
 
         final OutputStream bo = bufferSize > 0 ? new BufferedOutputStream(out, bufferSize) : out;
         try {
-          return OZIPCompressionUtil.compressDirectory(getStoragePath().toString(), bo,
-              new String[] { ".wal", ".fl", O2QCache.CACHE_STATISTIC_FILE_EXTENSION }, iOutput, compressionLevel);
+          return OZIPCompressionUtil
+              .compressDirectory(getStoragePath().toString(), bo, new String[] { ".fl", O2QCache.CACHE_STATISTIC_FILE_EXTENSION },
+                  iOutput, compressionLevel);
         } finally {
           if (bufferSize > 0) {
             bo.flush();
@@ -251,7 +252,7 @@ public class OLocalPaginatedStorage extends OAbstractPaginatedStorage {
         try {
           callable.call();
         } catch (Exception e) {
-          OLogManager.instance().error(this, "Error on calling callback on database restore");
+          OLogManager.instance().error(this, "Error on calling callback on database restore", e);
         }
 
       open(null, null, new OContextConfiguration());
@@ -291,7 +292,7 @@ public class OLocalPaginatedStorage extends OAbstractPaginatedStorage {
     long freezeId = getAtomicOperationsManager().freezeAtomicOperations(null, null);
     try {
       lastLSN = writeAheadLog.end();
-      writeAheadLog.newSegment();
+      writeAheadLog.appendNewSegment();
       nonActiveSegments = writeAheadLog.nonActiveSegments(startSegment);
     } finally {
       getAtomicOperationsManager().releaseAtomicOperations(freezeId);
@@ -396,11 +397,13 @@ public class OLocalPaginatedStorage extends OAbstractPaginatedStorage {
   }
 
   @Override
-  protected void postCloseSteps(boolean onDelete) throws IOException {
-    if (onDelete)
+  protected void postCloseSteps(boolean onDelete, boolean jvmError) throws IOException {
+    if (onDelete) {
       dirtyFlag.delete();
-    else {
-      dirtyFlag.clearDirty();
+    } else {
+      if (!jvmError) {
+        dirtyFlag.clearDirty();
+      }
       dirtyFlag.close();
     }
   }
@@ -438,7 +441,7 @@ public class OLocalPaginatedStorage extends OAbstractPaginatedStorage {
           if (!dbDir.delete())
             OLogManager.instance().error(this,
                 "Cannot delete storage directory with path " + dbDir.getAbsolutePath() + " because directory is not empty. Files: "
-                    + Arrays.toString(dbDir.listFiles()));
+                    + Arrays.toString(dbDir.listFiles()), null);
           return;
         }
       } else
@@ -463,7 +466,7 @@ public class OLocalPaginatedStorage extends OAbstractPaginatedStorage {
   }
 
   @Override
-  protected boolean isDirty() throws IOException {
+  protected boolean isDirty() {
     return dirtyFlag.isDirty();
   }
 

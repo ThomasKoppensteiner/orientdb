@@ -20,6 +20,7 @@ package com.orientechnologies.orient.etl;
 
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.common.io.OIOUtils;
+import com.orientechnologies.common.thread.OThreadPoolExecutorWithLogging;
 import com.orientechnologies.orient.core.OConstants;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.command.OCommandContext;
@@ -79,12 +80,8 @@ public class OETLProcessor {
    * @param iEndBlocks    List of Blocks to execute at the end of processing
    * @param iContext      Execution Context
    */
-  public OETLProcessor(final List<OETLBlock> iBeginBlocks,
-      final OETLSource iSource,
-      final OETLExtractor iExtractor,
-      final List<OETLTransformer> iTransformers,
-      final OETLLoader iLoader,
-      final List<OETLBlock> iEndBlocks,
+  public OETLProcessor(final List<OETLBlock> iBeginBlocks, final OETLSource iSource, final OETLExtractor iExtractor,
+      final List<OETLTransformer> iTransformers, final OETLLoader iLoader, final List<OETLBlock> iEndBlocks,
       final OCommandContext iContext) {
     beginBlocks = iBeginBlocks;
     source = iSource;
@@ -96,7 +93,7 @@ public class OETLProcessor {
     factory = new OETLComponentFactory();
     stats = new OETLProcessorStats();
 
-    executor = Executors.newCachedThreadPool();
+    executor = new OThreadPoolExecutorWithLogging(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<>());
 
     configRunBehaviour(context);
 
@@ -194,13 +191,9 @@ public class OETLProcessor {
 
       BlockingQueue<OETLExtractedItem> queue = new LinkedBlockingQueue<OETLExtractedItem>(workers * 500);
 
-
-      List<CompletableFuture<Void>> futures = IntStream.range(0, workers).boxed()
-          .map(i -> CompletableFuture.runAsync(
-              new OETLPipelineWorker(queue,
-                  new OETLPipeline(this, transformers, loader, logLevel, maxRetries, haltOnError)),
-              executor))
-          .collect(Collectors.toList());
+      List<CompletableFuture<Void>> futures = IntStream.range(0, workers).boxed().map(i -> CompletableFuture
+          .runAsync(new OETLPipelineWorker(queue, new OETLPipeline(this, transformers, loader, logLevel, maxRetries, haltOnError)),
+              executor)).collect(Collectors.toList());
 
       futures.add(CompletableFuture.runAsync(new OETLExtractorWorker(extractor, queue, haltOnError), executor));
 
@@ -382,8 +375,8 @@ public class OETLProcessor {
       try {
         inClass = Class.forName(iClassName);
       } catch (ClassNotFoundException e) {
-        throw new OConfigurationException(
-            "Class '" + iClassName + "' declared as 'input' of ETL Component '" + iComponent.getName() + "' was not found.");
+        throw OException.wrapException(new OConfigurationException(
+            "Class '" + iClassName + "' declared as 'input' of ETL Component '" + iComponent.getName() + "' was not found."), e);
       }
     return inClass;
   }

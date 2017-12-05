@@ -74,6 +74,9 @@ public class OrientGraphNoTxRemoteTest extends GraphTest {
     Thread.sleep(1000);
     ODatabaseDocumentTx.closeAll();
 
+    Orient.instance().shutdown();
+    Orient.instance().startup();
+
     if (oldOrientDBHome != null)
       System.setProperty("ORIENTDB_HOME", oldOrientDBHome);
     else
@@ -82,7 +85,6 @@ public class OrientGraphNoTxRemoteTest extends GraphTest {
     final File file = new File(serverHome);
     deleteDirectory(file);
     OGlobalConfiguration.NETWORK_LOCK_TIMEOUT.setValue(15000);
-    Orient.instance().startup();
   }
 
   @Before
@@ -147,7 +149,7 @@ public class OrientGraphNoTxRemoteTest extends GraphTest {
       if (graph.isClosed())
         currentGraphs.remove(url);
       else {
-        ODatabaseRecordThreadLocal.INSTANCE.set(graph.getRawGraph());
+        ODatabaseRecordThreadLocal.instance().set(graph.getRawGraph());
         return graph;
       }
     }

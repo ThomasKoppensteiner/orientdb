@@ -1,6 +1,7 @@
 package com.orientechnologies.orient.core.sql.executor;
 
 import com.orientechnologies.common.concur.OTimeoutException;
+import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
 import com.orientechnologies.orient.core.sql.parser.OWhereClause;
@@ -15,6 +16,8 @@ public class FilterStep extends AbstractExecutionStep {
   private OWhereClause whereClause;
 
   OResultSet prevResult = null;
+
+  private long cost;
 
   public FilterStep(OWhereClause whereClause, OCommandContext ctx, boolean profilingEnabled) {
     super(ctx, profilingEnabled);
@@ -55,10 +58,18 @@ public class FilterStep extends AbstractExecutionStep {
             }
           }
           nextItem = prevResult.next();
-          if (whereClause.matchesFilters(nextItem, ctx)) {
-            break;
+          long begin = profilingEnabled ? System.nanoTime() : 0;
+          try {
+            if (whereClause.matchesFilters(nextItem, ctx)) {
+              break;
+            }
+
+            nextItem = null;
+          } finally {
+            if (profilingEnabled) {
+              cost += (System.nanoTime() - begin);
+            }
           }
-          nextItem = null;
         }
       }
 
@@ -116,8 +127,16 @@ public class FilterStep extends AbstractExecutionStep {
 
   @Override
   public String prettyPrint(int depth, int indent) {
-    return OExecutionStepInternal.getIndent(depth, indent) + "+ FILTER ITEMS WHERE \n" + OExecutionStepInternal
-        .getIndent(depth, indent) + "  " + whereClause.toString();
+    StringBuilder result = new StringBuilder();
+    result.append(OExecutionStepInternal.getIndent(depth, indent) + "+ FILTER ITEMS WHERE ");
+    if (profilingEnabled) {
+      result.append(" (" + getCostFormatted() + ")");
+    }
+    result.append("\n");
+    result.append(OExecutionStepInternal.getIndent(depth, indent));
+    result.append("  ");
+    result.append(whereClause.toString());
+    return result.toString();
   }
 
   @Override
@@ -137,8 +156,12 @@ public class FilterStep extends AbstractExecutionStep {
       whereClause = new OWhereClause(-1);
       whereClause.deserialize(fromResult.getProperty("whereClause"));
     } catch (Exception e) {
-      throw new OCommandExecutionException("");
+      throw OException.wrapException(new OCommandExecutionException(""), e);
     }
   }
 
+  @Override
+  public long getCost() {
+    return cost;
+  }
 }

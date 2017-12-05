@@ -39,7 +39,7 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.ONonTx
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OOperationUnitId;
 import com.orientechnologies.orient.core.storage.impl.local.paginated.wal.OWriteAheadLog;
 import com.orientechnologies.orient.core.storage.impl.local.statistic.OPerformanceStatisticManager;
-import com.orientechnologies.orient.core.tx.OTransaction;
+import com.orientechnologies.orient.core.tx.OTransactionInternal;
 
 import javax.management.*;
 import java.io.IOException;
@@ -61,7 +61,8 @@ import java.util.concurrent.locks.LockSupport;
  * @since 12/3/13
  */
 public class OAtomicOperationsManager implements OAtomicOperationsMangerMXBean {
-  public static final String MBEAN_NAME = "com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations:type=OAtomicOperationsMangerMXBean";
+  @SuppressWarnings("SpellCheckingInspection")
+  private static final String MBEAN_NAME = "com.orientechnologies.orient.core.storage.impl.local.paginated.atomicoperations:type=OAtomicOperationsMangerMXBean";
 
   private volatile boolean trackAtomicOperations = OGlobalConfiguration.TX_TRACK_ATOMIC_OPERATIONS.getValueAsBoolean();
 
@@ -131,7 +132,7 @@ public class OAtomicOperationsManager implements OAtomicOperationsMangerMXBean {
    * operation.
    * <p>
    * <p>In current implementation of atomic operation, each component which is participated in atomic operation is hold under
-   * exclusive lock till atomic operation will not be completed (committed or rollbacked).
+   * exclusive lock till atomic operation will not be completed (committed or rolled back).
    * <p>
    * <p>If other thread is going to read data from component it has to acquire read lock inside of atomic operation manager {@link
    * #acquireReadLock(ODurableComponent)}, otherwise data consistency will be compromised.
@@ -538,8 +539,9 @@ public class OAtomicOperationsManager implements OAtomicOperationsMangerMXBean {
       try {
         linkLatch.await();
       } catch (InterruptedException e) {
-        throw new OInterruptedException(
-            "Thread was interrupted while was waiting for completion of 'waiting linked list' operation");
+        throw OException.wrapException(
+            new OInterruptedException("Thread was interrupted while was waiting for completion of 'waiting linked list' operation"),
+            e);
       }
     }
   }
@@ -552,7 +554,7 @@ public class OAtomicOperationsManager implements OAtomicOperationsMangerMXBean {
     if (storageTransaction == null)
       return true;
 
-    final OTransaction clientTx = storageTransaction.getClientTx();
+    final OTransactionInternal clientTx = storageTransaction.getClientTx();
     return clientTx == null || clientTx.isUsingLog();
 
   }

@@ -134,7 +134,7 @@ public class OLogSegmentV1 implements OLogSegment {
         }
 
         writeAheadLog.checkFreeSpace();
-      } catch (Throwable e) {
+      } catch (Exception e) {
         OLogManager.instance().error(this, "Error during WAL background flush", e);
       }
     }
@@ -194,7 +194,7 @@ public class OLogSegmentV1 implements OLogSegment {
           writeAheadLog.setFlushedLsn(stored);
         }
       } catch (IOException ioe) {
-        OLogManager.instance().error(this, "Can not force sync content of file " + path);
+        OLogManager.instance().error(this, "Can not force sync content of file " + path, ioe);
       }
     }
   }
@@ -230,7 +230,7 @@ public class OLogSegmentV1 implements OLogSegment {
    * {@inheritDoc}
    */
   @Override
-  public void stopBackgroundWrite(boolean flush) throws IOException {
+  public void stopBackgroundWrite(boolean flush) {
     if (flush)
       flush();
 
@@ -241,7 +241,7 @@ public class OLogSegmentV1 implements OLogSegment {
           throw new OStorageException("WAL flush task for '" + getPath() + "' segment cannot be stopped");
 
       } catch (InterruptedException e) {
-        OLogManager.instance().error(this, "Cannot shutdown background WAL commit thread");
+        OLogManager.instance().error(this, "Cannot shutdown background WAL commit thread", e);
       }
     }
   }
@@ -554,7 +554,7 @@ public class OLogSegmentV1 implements OLogSegment {
    * {@inheritDoc}
    */
   @Override
-  public void flush() throws IOException {
+  public void flush() {
     writeData();
     syncData();
   }

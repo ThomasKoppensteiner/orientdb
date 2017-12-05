@@ -266,7 +266,7 @@ public abstract class OCommandExecutorSQLResultsetAbstract extends OCommandExecu
 
   protected boolean pushResult(final Object rec) {
     if (rec instanceof ORecord) {
-      final ODatabaseDocumentInternal db = ODatabaseRecordThreadLocal.INSTANCE.getIfDefined();
+      final ODatabaseDocumentInternal db = ODatabaseRecordThreadLocal.instance().getIfDefined();
       if (db != null)
         db.getLocalCache().updateRecord((ORecord) rec);
     }
@@ -340,7 +340,7 @@ public abstract class OCommandExecutorSQLResultsetAbstract extends OCommandExecu
 
     try {
       limit = Integer.parseInt(word);
-    } catch (Exception e) {
+    } catch (NumberFormatException ignore) {
       throwParsingException("Invalid LIMIT value setted to '" + word + "' but it should be a valid integer. Example: LIMIT 10");
     }
 
@@ -367,7 +367,7 @@ public abstract class OCommandExecutorSQLResultsetAbstract extends OCommandExecu
     try {
       skip = Integer.parseInt(word);
 
-    } catch (Exception e) {
+    } catch (NumberFormatException ignore) {
       throwParsingException("Invalid SKIP value setted to '" + word
           + "' but it should be a valid positive integer. Example: SKIP 10");
     }
@@ -427,7 +427,7 @@ public abstract class OCommandExecutorSQLResultsetAbstract extends OCommandExecu
           subQuery.getContext().setParent(context);
           subQuery.getContext().setVariable("parentQuery", this);
           subQuery.getContext().setVariable("current", iRecord);
-          varValue = ODatabaseRecordThreadLocal.INSTANCE.get().query(subQuery);
+          varValue = ODatabaseRecordThreadLocal.instance().get().query(subQuery);
           if (varValue instanceof OLegacyResultSet) {
             varValue = ((OLegacyResultSet) varValue).copy();
           }
