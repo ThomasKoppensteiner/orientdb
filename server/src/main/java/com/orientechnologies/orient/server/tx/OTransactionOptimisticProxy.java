@@ -35,15 +35,11 @@ import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.ORecordInternal;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.record.impl.ODocumentInternal;
-import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
 import com.orientechnologies.orient.core.serialization.serializer.record.ORecordSerializer;
-import com.orientechnologies.orient.core.serialization.serializer.record.string.ORecordSerializerSchemaAware2CSV;
 import com.orientechnologies.orient.core.storage.OBasicTransaction;
 import com.orientechnologies.orient.core.tx.OTransactionIndexChanges;
 import com.orientechnologies.orient.core.tx.OTransactionOptimistic;
-import com.orientechnologies.orient.core.tx.OTransactionRealAbstract;
 import com.orientechnologies.orient.core.tx.OTransactionRecordIndexOperation;
-import com.orientechnologies.orient.enterprise.channel.binary.OChannelBinaryProtocol;
 
 import java.util.*;
 import java.util.Map.Entry;
@@ -83,7 +79,7 @@ public class OTransactionOptimisticProxy extends OTransactionOptimistic {
 
         switch (recordStatus) {
         case ORecordOperation.CREATED:
-          ORecord record = Orient.instance().getRecordFactoryManager().newInstance(operation.getRecordType());
+          ORecord record = Orient.instance().getRecordFactoryManager().newInstance(operation.getRecordType(), rid.getClusterId(), getDatabase());
           serializer.fromStream(operation.getRecord(), record, null);
           ORecordInternal.setIdentity(record, rid);
           ORecordInternal.setVersion(record, 0);
@@ -96,7 +92,7 @@ public class OTransactionOptimisticProxy extends OTransactionOptimistic {
 
         case ORecordOperation.UPDATED:
           int version = operation.getVersion();
-          ORecord updated = Orient.instance().getRecordFactoryManager().newInstance(operation.getRecordType());
+          ORecord updated = Orient.instance().getRecordFactoryManager().newInstance(operation.getRecordType(), rid.getClusterId(), getDatabase());
           ORecordInternal.setIdentity(updated, rid);
           ORecordInternal.setVersion(updated, version);
           entry = new ORecordOperation(updated, ORecordOperation.UPDATED);
@@ -218,20 +214,7 @@ public class OTransactionOptimisticProxy extends OTransactionOptimistic {
           continue;
 
         final Object key;
-        ODocument keyContainer;
-        if (protocolVersion <= OChannelBinaryProtocol.PROTOCOL_VERSION_24) {
-
-          final String serializedKey = OStringSerializerHelper.decode((String) entry.field("k"));
-          if (serializedKey.equals("*"))
-            keyContainer = null;
-          else {
-            keyContainer = new ODocument();
-            keyContainer.setLazyLoad(false);
-            ORecordSerializerSchemaAware2CSV.INSTANCE.fromString(serializedKey, keyContainer, null);
-          }
-        } else {
-          keyContainer = entry.field("k");
-        }
+        ODocument keyContainer = entry.field("k");
         if (keyContainer != null) {
           final Object storedKey = keyContainer.field("key");
           if (storedKey instanceof List)

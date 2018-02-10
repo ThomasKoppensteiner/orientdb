@@ -83,12 +83,12 @@ public abstract class OIndexManagerAbstract extends ODocumentWrapperNoClass impl
     if (!autoRecreateIndexesAfterCrash(database)) {
       acquireExclusiveLock();
       try {
-        if (database.getStorage().getConfiguration().indexMgrRecordId == null)
+        if (database.getStorage().getConfiguration().getIndexMgrRecordId() == null)
           // @COMPATIBILITY: CREATE THE INDEX MGR
           create(database);
 
         // RELOAD IT
-        ((ORecordId) document.getIdentity()).fromString(database.getStorage().getConfiguration().indexMgrRecordId);
+        ((ORecordId) document.getIdentity()).fromString(database.getStorage().getConfiguration().getIndexMgrRecordId());
         super.reload("*:-1 index:0");
       } finally {
         releaseExclusiveLock();
@@ -141,8 +141,9 @@ public abstract class OIndexManagerAbstract extends ODocumentWrapperNoClass impl
       }
     });
 
-    for (OMetadataUpdateListener listener : getDatabase().getSharedContext().browseListeners()) {
-      listener.onIndexManagerUpdate(this);
+    ODatabaseDocumentInternal database = getDatabase();
+    for (OMetadataUpdateListener listener : database.getSharedContext().browseListeners()) {
+      listener.onIndexManagerUpdate(database.getName(), this);
     }
 
     return (RET) this;
@@ -169,7 +170,7 @@ public abstract class OIndexManagerAbstract extends ODocumentWrapperNoClass impl
           save(OMetadataDefault.CLUSTER_INTERNAL_NAME);
         }
       }
-      database.getStorage().getConfiguration().indexMgrRecordId = document.getIdentity().toString();
+      database.getStorage().getConfiguration().setIndexMgrRecordId(document.getIdentity().toString());
       database.getStorage().getConfiguration().update();
 
       OIndexFactory factory = OIndexes.getFactory(OClass.INDEX_TYPE.DICTIONARY.toString(), null);
@@ -446,9 +447,7 @@ public abstract class OIndexManagerAbstract extends ODocumentWrapperNoClass impl
     return ODatabaseRecordThreadLocal.instance().get();
   }
 
-  protected static OStorage getStorage() {
-    return getDatabase().getStorage();
-  }
+  protected abstract OStorage getStorage();
 
   protected ODatabaseDocumentInternal getDatabaseIfDefined() {
     return ODatabaseRecordThreadLocal.instance().getIfDefined();

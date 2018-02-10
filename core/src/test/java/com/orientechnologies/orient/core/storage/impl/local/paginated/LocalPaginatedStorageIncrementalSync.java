@@ -23,7 +23,6 @@ import org.junit.Test;
 import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
-import java.util.HashSet;
 import java.util.Random;
 
 public class LocalPaginatedStorageIncrementalSync {
@@ -99,8 +98,7 @@ public class LocalPaginatedStorageIncrementalSync {
       final OutputStream outputStream = Channels.newOutputStream(channel);
       final OutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
 
-      ((OAbstractPaginatedStorage) originalDB.getStorage()).recordsChangedAfterLSN(startLSN, bufferedOutputStream,
-          new HashSet<String>(),null);
+      ((OAbstractPaginatedStorage) originalDB.getStorage()).recordsChangedAfterLSN(startLSN, bufferedOutputStream, null);
       bufferedOutputStream.close();
 
       dataFile.close();
@@ -163,7 +161,7 @@ public class LocalPaginatedStorageIncrementalSync {
 
           if (loadedRecord == null) {
             do {
-              newRecord = Orient.instance().getRecordFactoryManager().newInstance((byte) recordType);
+              newRecord = Orient.instance().getRecordFactoryManager().newInstance((byte) recordType, clusterId, db);
 
               ORecordInternal.fill(newRecord, new ORecordId(rid.getClusterId(), -1), recordVersion - 1, recordContent, true);
 
@@ -178,7 +176,7 @@ public class LocalPaginatedStorageIncrementalSync {
 
           } else {
             // UPDATE
-            newRecord = Orient.instance().getRecordFactoryManager().newInstance((byte) recordType);
+            newRecord = Orient.instance().getRecordFactoryManager().newInstance((byte) recordType, clusterId, db);
             ORecordInternal.fill(newRecord, rid, ORecordVersionHelper.setRollbackMode(recordVersion), recordContent, true);
 
             if (loadedRecord instanceof ODocument) {

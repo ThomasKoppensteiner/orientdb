@@ -94,6 +94,7 @@ public class ODocument extends ORecordAbstract
    *
    * @param iSource Raw stream
    */
+  @Deprecated
   public ODocument(final byte[] iSource) {
     _source = iSource;
     setup();
@@ -113,8 +114,8 @@ public class ODocument extends ORecordAbstract
   }
 
   /**
-   * Creates a new instance in memory linked by the Record Id to the persistent one. New instances are not persistent until
-   * {@link #save()} is called.
+   * Creates a new instance in memory linked by the Record Id to the persistent one. New instances are not persistent until {@link
+   * #save()} is called.
    *
    * @param iRID Record Id
    */
@@ -221,7 +222,7 @@ public class ODocument extends ORecordAbstract
 
   @Override
   public Optional<OEdge> asEdge() {
-    if (this instanceof OVertex)
+    if (this instanceof OEdge)
       return Optional.of((OEdge) this);
     OClass type = this.getSchemaClass();
     if (type == null) {
@@ -313,6 +314,14 @@ public class ODocument extends ORecordAbstract
         removeCollectionChangeListener(entry, entry.value);
         entry.value = value;
         addCollectionChangeListener(entry);
+      }
+    }
+
+    if (value instanceof OElement) {
+      if (((OElement) value).isVertex()) {
+        value = (RET) ((OElement) value).asVertex().get();
+      } else if (((OElement) value).isEdge()) {
+        value = (RET) ((OElement) value).asEdge().get();
       }
     }
 
@@ -903,10 +912,8 @@ public class ODocument extends ORecordAbstract
   }
 
   /**
-   * Loads the record using a fetch plan. Example:
-   * <p>
-   * <code>doc.load( "*:3" ); // LOAD THE DOCUMENT BY EARLY FETCHING UP TO 3rd LEVEL OF CONNECTIONS</code>
-   * </p>
+   * Loads the record using a fetch plan. Example: <p> <code>doc.load( "*:3" ); // LOAD THE DOCUMENT BY EARLY FETCHING UP TO 3rd
+   * LEVEL OF CONNECTIONS</code> </p>
    *
    * @param iFetchPlan Fetch plan to use
    */
@@ -915,10 +922,8 @@ public class ODocument extends ORecordAbstract
   }
 
   /**
-   * Loads the record using a fetch plan. Example:
-   * <p>
-   * <code>doc.load( "*:3", true ); // LOAD THE DOCUMENT BY EARLY FETCHING UP TO 3rd LEVEL OF CONNECTIONS IGNORING THE CACHE</code>
-   * </p>
+   * Loads the record using a fetch plan. Example: <p> <code>doc.load( "*:3", true ); // LOAD THE DOCUMENT BY EARLY FETCHING UP TO
+   * 3rd LEVEL OF CONNECTIONS IGNORING THE CACHE</code> </p>
    *
    * @param iIgnoreCache Ignore the cache or use it
    */
@@ -1096,7 +1101,8 @@ public class ODocument extends ORecordAbstract
   }
 
   /**
-   * Evaluates a SQL expression against current document. Example: <code>long amountPlusVat = doc.eval("amount * 120 / 100");</code>
+   * Evaluates a SQL expression against current document. Example: <code>long amountPlusVat = doc.eval("amount * 120 /
+   * 100");</code>
    *
    * @param iExpression SQL expression to evaluate.
    *
@@ -1110,10 +1116,8 @@ public class ODocument extends ORecordAbstract
 
   /**
    * Evaluates a SQL expression against current document by passing a context. The expression can refer to the variables contained
-   * in the context. Example: <code>
-   * OCommandContext context = new OBasicCommandContext().setVariable("vat", 20);
-   * long amountPlusVat = doc.eval("amount * (100+$vat) / 100", context);
-   * </code>
+   * in the context. Example: <code> OCommandContext context = new OBasicCommandContext().setVariable("vat", 20); long amountPlusVat
+   * = doc.eval("amount * (100+$vat) / 100", context); </code>
    *
    * @param iExpression SQL expression to evaluate.
    *
@@ -1246,9 +1250,8 @@ public class ODocument extends ORecordAbstract
   }
 
   /**
-   * Deprecated. Use fromMap(Map) instead.<br>
-   * Fills a document passing the field names/values as a Map String,Object where the keys are the field names and the values are
-   * the field values.
+   * Deprecated. Use fromMap(Map) instead.<br> Fills a document passing the field names/values as a Map String,Object where the keys
+   * are the field names and the values are the field values.
    *
    * @see #fromMap(Map)
    */
@@ -1564,11 +1567,9 @@ public class ODocument extends ORecordAbstract
   }
 
   /**
-   * Returns list of changed fields. There are two types of changes:
-   * <ol>
-   * <li>Value of field itself was changed by calling of {@link #field(String, Object)} method for example.</li>
-   * <li>Internal state of field was changed but was not saved. This case currently is applicable for for collections only.</li>
-   * </ol>
+   * Returns list of changed fields. There are two types of changes: <ol> <li>Value of field itself was changed by calling of {@link
+   * #field(String, Object)} method for example.</li> <li>Internal state of field was changed but was not saved. This case currently
+   * is applicable for for collections only.</li> </ol>
    *
    * @return List of fields, values of which were changed.
    */
@@ -1833,17 +1834,9 @@ public class ODocument extends ORecordAbstract
   }
 
   /**
-   * <p>
-   * Clears all the field values and types. Clears only record content, but saves its identity.
-   * </p>
+   * <p> Clears all the field values and types. Clears only record content, but saves its identity. </p>
    * <p/>
-   * <p>
-   * The following code will clear all data from specified document.
-   * </p>
-   * <code>
-   * doc.clear();
-   * doc.save();
-   * </code>
+   * <p> The following code will clear all data from specified document. </p> <code> doc.clear(); doc.save(); </code>
    *
    * @return this
    *
@@ -1858,22 +1851,12 @@ public class ODocument extends ORecordAbstract
   }
 
   /**
-   * <p>
-   * Resets the record values and class type to being reused. It's like you create a ODocument from scratch. This method is handy
-   * when you want to insert a bunch of documents and don't want to strain GC.
-   * </p>
+   * <p> Resets the record values and class type to being reused. It's like you create a ODocument from scratch. This method is
+   * handy when you want to insert a bunch of documents and don't want to strain GC. </p>
    * <p/>
-   * <p>
-   * The following code will create a new document in database.
-   * </p>
-   * <code>
-   * doc.clear();
-   * doc.save();
-   * </code>
+   * <p> The following code will create a new document in database. </p> <code> doc.clear(); doc.save(); </code>
    * <p/>
-   * <p>
-   * IMPORTANT! This can be used only if no transactions are begun.
-   * </p>
+   * <p> IMPORTANT! This can be used only if no transactions are begun. </p>
    *
    * @return this
    *
@@ -1899,8 +1882,8 @@ public class ODocument extends ORecordAbstract
   }
 
   /**
-   * Rollbacks changes to the loaded version without reloading the document. Works only if tracking changes is enabled @see
-   * {@link #isTrackingChanges()} and {@link #setTrackingChanges(boolean)} methods.
+   * Rollbacks changes to the loaded version without reloading the document. Works only if tracking changes is enabled @see {@link
+   * #isTrackingChanges()} and {@link #setTrackingChanges(boolean)} methods.
    */
   public ODocument undo() {
     if (!_trackingChanges)
@@ -1969,8 +1952,8 @@ public class ODocument extends ORecordAbstract
   }
 
   /**
-   * Enabled or disabled the tracking of changes in the document. This is needed by some triggers like
-   * {@link com.orientechnologies.orient.core.index.OClassIndexManager} to determine what fields are changed to update indexes.
+   * Enabled or disabled the tracking of changes in the document. This is needed by some triggers like {@link
+   * com.orientechnologies.orient.core.index.OClassIndexManager} to determine what fields are changed to update indexes.
    *
    * @param iTrackingChanges True to enable it, otherwise false
    *
@@ -2128,7 +2111,8 @@ public class ODocument extends ORecordAbstract
   /*
    * Initializes the object if has been unserialized
    */
-  public boolean deserializeFields(final String... iFields) {
+  public boolean deserializeFields(String... iFields) {
+    List<String> additional = null;
     if (_source == null)
       // ALREADY UNMARSHALLED OR JUST EMPTY
       return true;
@@ -2146,9 +2130,22 @@ public class ODocument extends ORecordAbstract
               pos = pos2;
 
             // REPLACE THE FIELD NAME
-            iFields[i] = f.substring(0, pos);
+            if (additional == null) {
+              additional = new ArrayList<>();
+            }
+            additional.add(f.substring(0, pos));
           }
         }
+      }
+
+      if (additional != null && iFields != null) {
+        String[] copy = new String[iFields.length + additional.size()];
+        System.arraycopy(iFields, 0, copy, 0, iFields.length);
+        int next = iFields.length;
+        for (String s : additional) {
+          copy[next++] = s;
+        }
+        iFields = copy;
       }
 
       // CHECK IF HAS BEEN ALREADY UNMARSHALLED
@@ -2479,10 +2476,10 @@ public class ODocument extends ORecordAbstract
           bagsMerged = ((ORidBag) value).tryMerge((ORidBag) otherValue, iMergeSingleItemsOfMultiValueFields);
 
         if (!bagsMerged && (value != null && !value.equals(otherValue)) || (value == null && otherValue != null)) {
-          field(f, otherValue);
+          setProperty(f, otherValue);
         }
       } else {
-        field(f, otherValue);
+        setProperty(f, otherValue);
       }
     }
 
@@ -2501,6 +2498,13 @@ public class ODocument extends ORecordAbstract
     _schema = null;
     fetchSchemaIfCan();
     return super.fill(iRid, iVersion, iBuffer, iDirty);
+  }
+
+  protected ORecordAbstract fill(final ORID iRid, final int iVersion, final byte[] iBuffer, final boolean iDirty,
+      ODatabaseDocumentInternal db) {
+    _schema = null;
+    fetchSchemaIfCan(db);
+    return super.fill(iRid, iVersion, iBuffer, iDirty, db);
   }
 
   @Override
@@ -2765,6 +2769,9 @@ public class ODocument extends ORecordAbstract
       return;
     for (Map.Entry<String, ODocumentEntry> fieldEntry : _fields.entrySet()) {
       final Object fieldValue = fieldEntry.getValue().value;
+      if (fieldValue instanceof ORidBag) {
+        ((ORidBag) fieldValue).checkAndConvert();
+      }
       if (!(fieldValue instanceof Collection<?>) && !(fieldValue instanceof Map<?, ?>) && !(fieldValue instanceof ODocument))
         continue;
       if (addCollectionChangeListener(fieldEntry.getValue())) {
@@ -2991,6 +2998,15 @@ public class ODocument extends ORecordAbstract
   private void fetchSchemaIfCan() {
     if (_schema == null) {
       ODatabaseDocumentInternal db = ODatabaseRecordThreadLocal.instance().getIfDefined();
+      if (db != null && !db.isClosed()) {
+        OMetadataInternal metadata = db.getMetadata();
+        _schema = metadata.getImmutableSchemaSnapshot();
+      }
+    }
+  }
+
+  private void fetchSchemaIfCan(ODatabaseDocumentInternal db) {
+    if (_schema == null) {
       if (db != null && !db.isClosed()) {
         OMetadataInternal metadata = db.getMetadata();
         _schema = metadata.getImmutableSchemaSnapshot();

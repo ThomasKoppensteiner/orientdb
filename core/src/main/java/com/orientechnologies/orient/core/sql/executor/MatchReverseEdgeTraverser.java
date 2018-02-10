@@ -3,6 +3,7 @@ package com.orientechnologies.orient.core.sql.executor;
 import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.sql.parser.OMatchPathItem;
+import com.orientechnologies.orient.core.sql.parser.ORid;
 import com.orientechnologies.orient.core.sql.parser.OWhereClause;
 
 import java.util.ArrayList;
@@ -27,6 +28,14 @@ public class MatchReverseEdgeTraverser extends MatchEdgeTraverser {
     return edge.getLeftClass();
   }
 
+  protected String targetClusterName(OMatchPathItem item, OCommandContext iCommandContext) {
+    return edge.getLeftCluster();
+  }
+
+  protected ORid targetRid(OMatchPathItem item, OCommandContext iCommandContext) {
+    return edge.getLeftRid();
+  }
+
   protected OWhereClause getTargetFilter(OMatchPathItem item) {
     return edge.getLeftFilter();
   }
@@ -35,13 +44,13 @@ public class MatchReverseEdgeTraverser extends MatchEdgeTraverser {
   protected Iterable<OResultInternal> traversePatternEdge(OIdentifiable startingPoint, OCommandContext iCommandContext) {
 
     Object qR = this.item.getMethod().executeReverse(startingPoint, iCommandContext);
-    if(qR==null){
+    if (qR == null) {
       return Collections.emptyList();
     }
-    if(qR instanceof OResultInternal){
+    if (qR instanceof OResultInternal) {
       return Collections.singleton((OResultInternal) qR);
     }
-    if(qR instanceof OIdentifiable){
+    if (qR instanceof OIdentifiable) {
       return Collections.singleton(new OResultInternal((OIdentifiable) qR));
     }
     if (qR instanceof Iterable) {
@@ -52,8 +61,9 @@ public class MatchReverseEdgeTraverser extends MatchEdgeTraverser {
           result.add(new OResultInternal((OIdentifiable) o));
         } else if (o instanceof OResultInternal) {
           result.add((OResultInternal) o);
-        }
-        else{
+        } else if (o == null) {
+          continue;
+        } else {
           throw new UnsupportedOperationException();
         }
       }

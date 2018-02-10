@@ -34,7 +34,7 @@ import com.orientechnologies.orient.core.command.*;
 import com.orientechnologies.orient.core.command.script.OCommandScript;
 import com.orientechnologies.orient.core.config.OContextConfiguration;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
-import com.orientechnologies.orient.core.config.OStorageConfiguration;
+import com.orientechnologies.orient.core.config.OStorageConfigurationImpl;
 import com.orientechnologies.orient.core.conflict.ORecordConflictStrategy;
 import com.orientechnologies.orient.core.db.ODatabaseDocumentInternal;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
@@ -106,6 +106,11 @@ public class ODistributedStorage implements OStorage, OFreezableStorageComponent
     this.serverInstance = iServer;
     this.dManager = iServer.getDistributedManager();
     this.name = dbName;
+  }
+
+  public synchronized void replaceIfNeeded(final OAbstractPaginatedStorage wrapped) {
+    if (this.wrapped != wrapped)
+      this.wrapped = wrapped;
   }
 
   public synchronized void wrap(final OAbstractPaginatedStorage wrapped) {
@@ -886,301 +891,10 @@ public class ODistributedStorage implements OStorage, OFreezableStorageComponent
   }
 
   @Override
-  public OStorageOperationResult<Integer> updateRecord(final ORecordId iRecordId, final boolean updateContent,
-      final byte[] iContent, final int iVersion, final byte iRecordType, final int iMode,
-      final ORecordCallback<Integer> iCallback) {
-    resetLastValidBackup();
-
-    if (isLocalEnv()) {
-      // ALREADY DISTRIBUTED
-      return wrapped.updateRecord(iRecordId, updateContent, iContent, iVersion, iRecordType, iMode, iCallback);
-    }
-
-    final ODistributedConfiguration dbCfg = distributedConfiguration;
-
-    final String clusterName = getClusterNameByRID(iRecordId);
-
-    final String localNodeName = dManager.getLocalNodeName();
-
-    checkWriteQuorum(dbCfg, clusterName, localNodeName);
-
-    try {
-
-      checkNodeIsMaster(localNodeName, dbCfg, "Update record " + iRecordId);
-
-      final List<String> nodes = dbCfg.getServers(clusterName, null);
-
-      if (nodes.isEmpty())
-        // NO REPLICATION: EXECUTE IT LOCALLY
-        return wrapped.updateRecord(iRecordId, updateContent, iContent, iVersion, iRecordType, iMode, iCallback);
-
-      final Set<String> clusterNames = Collections.singleton(clusterName);
-
-      Boolean executionModeSynch = dbCfg.isExecutionModeSynchronous(clusterName);
-      if (executionModeSynch == null)
-        executionModeSynch = iMode == 0;
-      final boolean syncMode = executionModeSynch;
-
-      return (OStorageOperationResult<Integer>) executeRecordOperationInLock(syncMode, iRecordId,
-          new OCallable<Object, OCallable<Void, ODistributedRequestId>>() {
-
-            @Override
-            public Object call(OCallable<Void, ODistributedRequestId> unlockCallback) {
-
-              final OUpdateRecordTask task = (OUpdateRecordTask) dManager.getTaskFactoryManager().getFactoryByServerNames(nodes)
-                  .createTask(OUpdateRecordTask.FACTORYID);
-              task.init(iRecordId, iContent, iVersion, iRecordType);
-
-              final OStorageOperationResult<Integer> localResult;
-
-              final boolean executedLocally = nodes.contains(localNodeName);
-              if (executedLocally) {
-                // EXECUTE ON LOCAL NODE FIRST
-                try {
-                  // LOAD CURRENT RECORD
-                  task.checkRecordExists();
-
-                  localResult = (OStorageOperationResult<Integer>) OScenarioThreadLocal.executeAsDistributed(new Callable() {
-                    @Override
-                    public Object call() throws Exception {
-                      task.setLastLSN(wrapped.getLSN());
-                      return wrapped.updateRecord(iRecordId, updateContent, iContent, iVersion, iRecordType, iMode, iCallback);
-                    }
-                  });
-                } catch (RuntimeException e) {
-                  throw e;
-                } catch (Exception e) {
-                  throw OException.wrapException(new ODistributedException("Cannot delete record " + iRecordId), e);
-                }
-                nodes.remove(localNodeName);
-              } else
-                localResult = null;
-
-              if (nodes.isEmpty()) {
-                unlockCallback.call(null);
-
-                if (!executedLocally)
-                  throw new ODistributedException(
-                      "Cannot execute distributed update on record " + iRecordId + " because no nodes are available");
-              } else {
-                final Integer localResultPayload = localResult != null ? localResult.getResult() : null;
-
-                if (syncMode || localResult == null) {
-                  // REPLICATE IT
-                  try {
-                    final ODistributedResponse dResponse = dManager
-                        .sendRequest(getName(), clusterNames, nodes, task, dManager.getNextMessageIdCounter(),
-                            EXECUTION_MODE.RESPONSE, localResultPayload, unlockCallback, null);
-
-                    final Object payload = dResponse.getPayload();
-
-                    if (payload instanceof Exception) {
-                      if (payload instanceof ORecordNotFoundException) {
-                        // REPAIR THE RECORD IMMEDIATELY
-                        localDistributedDatabase.getDatabaseRepairer()
-                            .enqueueRepairRecord((ORecordId) ((ORecordNotFoundException) payload).getRid());
-                      }
-
-                      executeUndoOnLocalServer(dResponse.getRequestId(), task);
-
-                      if (payload instanceof ONeedRetryException)
-                        throw (ONeedRetryException) payload;
-
-                      throw OException.wrapException(new ODistributedException("Error on execution distributed update record"),
-                          (Exception) payload);
-                    }
-
-                    // UPDATE LOCALLY
-                    return new OStorageOperationResult<Integer>((Integer) payload);
-
-                  } catch (RuntimeException e) {
-                    executeUndoOnLocalServer(null, task);
-                    throw e;
-                  } catch (Exception e) {
-                    executeUndoOnLocalServer(null, task);
-                    throw ODatabaseException
-                        .wrapException(new ODistributedException("Cannot execute distributed update record"), e);
-                  }
-                }
-
-                // ASYNCHRONOUS CALL: EXECUTE LOCALLY AND THEN DISTRIBUTE
-                asynchronousExecution(new OAsynchDistributedOperation(getName(), Collections.singleton(clusterName), nodes, task,
-                    dManager.getNextMessageIdCounter(), localResultPayload, unlockCallback, null));
-              }
-
-              return localResult;
-            }
-          });
-
-    } catch (ONeedRetryException e) {
-      localDistributedDatabase.getDatabaseRepairer().enqueueRepairRecord(iRecordId);
-
-      // PASS THROUGH
-      throw e;
-
-    } catch (HazelcastInstanceNotActiveException e) {
-      throw OException.wrapException(new OOfflineNodeException("Hazelcast instance is not available"), e);
-
-    } catch (HazelcastException e) {
-      throw OException.wrapException(new OOfflineNodeException("Hazelcast instance is not available"), e);
-
-    } catch (Exception e) {
-      localDistributedDatabase.getDatabaseRepairer().enqueueRepairRecord(iRecordId);
-
-      handleDistributedException("Cannot route UPDATE_RECORD operation for %s to the distributed node", e, iRecordId);
-      // UNREACHABLE
-      return null;
-    }
-
-  }
-
-  @Override
   public OStorageOperationResult<Boolean> deleteRecord(final ORecordId iRecordId, final int iVersion, final int iMode,
       final ORecordCallback<Boolean> iCallback) {
-    resetLastValidBackup();
-
-    if (isLocalEnv()) {
-      // ALREADY DISTRIBUTED
-      return wrapped.deleteRecord(iRecordId, iVersion, iMode, iCallback);
-    }
-
-    final String clusterName = getClusterNameByRID(iRecordId);
-
-    final ODistributedConfiguration dbCfg = distributedConfiguration;
-
-    final String localNodeName = dManager.getLocalNodeName();
-
-    checkWriteQuorum(dbCfg, clusterName, localNodeName);
-
-    try {
-      checkNodeIsMaster(localNodeName, dbCfg, "Delete record " + iRecordId);
-
-      final List<String> nodes = dbCfg.getServers(clusterName, null);
-
-      if (nodes.isEmpty())
-        // NO NODES: EXECUTE LOCALLY ONLY
-        return wrapped.deleteRecord(iRecordId, iVersion, iMode, iCallback);
-
-      final Set<String> clusterNames = Collections.singleton(clusterName);
-
-      Boolean executionModeSynch = dbCfg.isExecutionModeSynchronous(clusterName);
-      if (executionModeSynch == null)
-        executionModeSynch = iMode == 0;
-      final boolean syncMode = executionModeSynch;
-
-      return (OStorageOperationResult<Boolean>) executeRecordOperationInLock(syncMode, iRecordId,
-          new OCallable<Object, OCallable<Void, ODistributedRequestId>>() {
-
-            @Override
-            public Object call(OCallable<Void, ODistributedRequestId> unlockCallback) {
-
-              final ODeleteRecordTask task = (ODeleteRecordTask) dManager.getTaskFactoryManager().getFactoryByServerNames(nodes)
-                  .createTask(ODeleteRecordTask.FACTORYID);
-              task.init(iRecordId, iVersion);
-
-              final OStorageOperationResult<Boolean> localResult;
-
-              final boolean executedLocally = nodes.contains(localNodeName);
-              if (executedLocally) {
-                // EXECUTE ON LOCAL NODE FIRST
-                try {
-                  // LOAD CURRENT RECORD
-                  task.checkRecordExists();
-
-                  localResult = (OStorageOperationResult<Boolean>) OScenarioThreadLocal.executeAsDistributed(new Callable() {
-                    @Override
-                    public Object call() throws Exception {
-                      task.setLastLSN(wrapped.getLSN());
-                      return wrapped.deleteRecord(iRecordId, iVersion, iMode, iCallback);
-                    }
-                  });
-                } catch (RuntimeException e) {
-                  throw e;
-                } catch (Exception e) {
-                  throw OException.wrapException(new ODistributedException("Cannot delete record " + iRecordId), e);
-                }
-                nodes.remove(localNodeName);
-              } else
-                localResult = null;
-
-              if (nodes.isEmpty()) {
-                unlockCallback.call(null);
-
-                if (!executedLocally)
-                  throw new ODistributedException(
-                      "Cannot execute distributed delete on record " + iRecordId + " because no nodes are available");
-              } else {
-
-                final Boolean localResultPayload = localResult != null ? localResult.getResult() : null;
-
-                if (syncMode || localResult == null) {
-                  // REPLICATE IT
-                  try {
-                    final ODistributedResponse dResponse = dManager
-                        .sendRequest(getName(), clusterNames, nodes, task, dManager.getNextMessageIdCounter(),
-                            EXECUTION_MODE.RESPONSE, localResultPayload, unlockCallback, null);
-
-                    final Object payload = dResponse.getPayload();
-
-                    if (payload instanceof Exception) {
-                      if (payload instanceof ORecordNotFoundException) {
-                        // REPAIR THE RECORD IMMEDIATELY
-                        localDistributedDatabase.getDatabaseRepairer()
-                            .enqueueRepairRecord((ORecordId) ((ORecordNotFoundException) payload).getRid());
-                      }
-
-                      executeUndoOnLocalServer(dResponse.getRequestId(), task);
-
-                      if (payload instanceof ONeedRetryException)
-                        throw (ONeedRetryException) payload;
-
-                      throw OException.wrapException(new ODistributedException("Error on execution distributed delete record"),
-                          (Exception) payload);
-                    }
-
-                    return new OStorageOperationResult<Boolean>(true);
-
-                  } catch (RuntimeException e) {
-                    executeUndoOnLocalServer(null, task);
-                    throw e;
-                  } catch (Exception e) {
-                    executeUndoOnLocalServer(null, task);
-                    throw ODatabaseException
-                        .wrapException(new ODistributedException("Cannot execute distributed delete record"), e);
-                  }
-                }
-
-                // ASYNCHRONOUS CALL: EXECUTE LOCALLY AND THEN DISTRIBUTE
-                if (!nodes.isEmpty())
-                  asynchronousExecution(new OAsynchDistributedOperation(getName(), Collections.singleton(clusterName), nodes, task,
-                      dManager.getNextMessageIdCounter(), localResultPayload, unlockCallback, null));
-
-              }
-
-              return localResult;
-            }
-          });
-
-    } catch (ONeedRetryException e) {
-      localDistributedDatabase.getDatabaseRepairer().enqueueRepairRecord(iRecordId);
-
-      // PASS THROUGH
-      throw e;
-
-    } catch (HazelcastInstanceNotActiveException e) {
-      throw OException.wrapException(new OOfflineNodeException("Hazelcast instance is not available"), e);
-
-    } catch (HazelcastException e) {
-      throw OException.wrapException(new OOfflineNodeException("Hazelcast instance is not available"), e);
-
-    } catch (Exception e) {
-      localDistributedDatabase.getDatabaseRepairer().enqueueRepairRecord(iRecordId);
-
-      handleDistributedException("Cannot route DELETE_RECORD operation for %s to the distributed node", e, iRecordId);
-      // UNREACHABLE
-      return null;
-    }
-
+    // IF is a real delete should be with a tx
+    return wrapped.deleteRecord(iRecordId, iVersion, iMode, iCallback);
   }
 
   @Override
@@ -1393,13 +1107,13 @@ public class ODistributedStorage implements OStorage, OFreezableStorageComponent
   }
 
   @Override
-  public List<ORecordOperation> commit(final OTransactionInternal iTx, final Runnable callback) {
+  public List<ORecordOperation> commit(final OTransactionInternal iTx) {
     resetLastValidBackup();
 
     if (isLocalEnv()) {
       // ALREADY DISTRIBUTED
       try {
-        return wrapped.commit(iTx, callback);
+        return wrapped.commit(iTx);
       } catch (ORecordDuplicatedException e) {
         // CHECK THE RECORD HAS THE SAME KEY IS STILL UNDER DISTRIBUTED TX
         final ODistributedDatabase dDatabase = dManager.getMessageService().getDatabase(getName());
@@ -1422,7 +1136,7 @@ public class ODistributedStorage implements OStorage, OFreezableStorageComponent
         OScenarioThreadLocal.executeAsDistributed(new Callable() {
           @Override
           public Object call() throws Exception {
-            return wrapped.commit(iTx, callback);
+            return wrapped.commit(iTx);
           }
         });
       } else {
@@ -1440,8 +1154,7 @@ public class ODistributedStorage implements OStorage, OFreezableStorageComponent
 
           try {
 
-            final List<ORecordOperation> result = txManager
-                .commit(ODatabaseRecordThreadLocal.instance().get(), iTx, callback, eventListener);
+            final List<ORecordOperation> result = txManager.commit(ODatabaseRecordThreadLocal.instance().get(), iTx, eventListener);
 
             if (result != null) {
               for (ORecordOperation r : result) {
@@ -1543,7 +1256,7 @@ public class ODistributedStorage implements OStorage, OFreezableStorageComponent
   }
 
   @Override
-  public OStorageConfiguration getConfiguration() {
+  public OStorageConfigurationImpl getConfiguration() {
     return wrapped.getConfiguration();
   }
 

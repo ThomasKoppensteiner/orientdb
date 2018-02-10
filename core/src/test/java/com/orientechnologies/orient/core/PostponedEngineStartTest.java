@@ -22,7 +22,7 @@ package com.orientechnologies.orient.core;
 import com.orientechnologies.orient.core.command.OCommandOutputListener;
 import com.orientechnologies.orient.core.command.OCommandRequestText;
 import com.orientechnologies.orient.core.config.OContextConfiguration;
-import com.orientechnologies.orient.core.config.OStorageConfiguration;
+import com.orientechnologies.orient.core.config.OStorageConfigurationImpl;
 import com.orientechnologies.orient.core.conflict.ORecordConflictStrategy;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.db.record.OCurrentStorageComponentsFactory;
@@ -295,12 +295,6 @@ public class PostponedEngineStartTest {
         }
 
         @Override
-        public OStorageOperationResult<Integer> updateRecord(ORecordId iRecordId, boolean updateContent, byte[] iContent,
-            int iVersion, byte iRecordType, int iMode, ORecordCallback<Integer> iCallback) {
-          return null;
-        }
-
-        @Override
         public OStorageOperationResult<Integer> recyclePosition(ORecordId iRecordId, byte[] iContent, int iVersion,
             byte iRecordType) {
           return null;
@@ -323,7 +317,7 @@ public class PostponedEngineStartTest {
         }
 
         @Override
-        public List<ORecordOperation> commit(OTransactionInternal iTx, Runnable callback) {
+        public List<ORecordOperation> commit(OTransactionInternal iTx) {
           return null;
         }
 
@@ -333,7 +327,7 @@ public class PostponedEngineStartTest {
         }
 
         @Override
-        public OStorageConfiguration getConfiguration() {
+        public OStorageConfigurationImpl getConfiguration() {
           return null;
         }
 

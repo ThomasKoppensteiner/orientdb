@@ -1,25 +1,24 @@
 /*
-*
-*  *  Copyright 2010-2016 OrientDB LTD (http://orientdb.com)
-*  *
-*  *  Licensed under the Apache License, Version 2.0 (the "License");
-*  *  you may not use this file except in compliance with the License.
-*  *  You may obtain a copy of the License at
-*  *
-*  *       http://www.apache.org/licenses/LICENSE-2.0
-*  *
-*  *  Unless required by applicable law or agreed to in writing, software
-*  *  distributed under the License is distributed on an "AS IS" BASIS,
-*  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-*  *  See the License for the specific language governing permissions and
-*  *  limitations under the License.
-*  *
-*  * For more information: http://orientdb.com
-*
-*/
+ *
+ *  *  Copyright 2010-2016 OrientDB LTD (http://orientdb.com)
+ *  *
+ *  *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  *  you may not use this file except in compliance with the License.
+ *  *  You may obtain a copy of the License at
+ *  *
+ *  *       http://www.apache.org/licenses/LICENSE-2.0
+ *  *
+ *  *  Unless required by applicable law or agreed to in writing, software
+ *  *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  *  See the License for the specific language governing permissions and
+ *  *  limitations under the License.
+ *  *
+ *  * For more information: http://orientdb.com
+ *
+ */
 package com.orientechnologies.orient.core.config;
 
-import com.orientechnologies.common.directmemory.OByteBufferPool;
 import com.orientechnologies.common.io.OFileUtils;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.common.profiler.OProfiler;
@@ -67,8 +66,8 @@ public enum OGlobalConfiguration {
   // MEMORY
   MEMORY_USE_UNSAFE("memory.useUnsafe", "Indicates whether Unsafe will be used, if it is present", Boolean.class, true),
 
-  MEMORY_CHUNK_SIZE("memory.chunk.size", "Size of single memory chunk (in bytes) which will be preallocated by OrientDB",
-      Integer.class, Integer.MAX_VALUE),
+  @Deprecated MEMORY_CHUNK_SIZE("memory.chunk.size",
+      "Size of single memory chunk (in bytes) which will be preallocated by OrientDB", Integer.class, Integer.MAX_VALUE),
 
   MEMORY_LEFT_TO_OS("memory.leftToOS",
       "Amount of free memory which should be left unallocated in case of OrientDB is started outside of container. "
@@ -89,25 +88,14 @@ public enum OGlobalConfiguration {
           + "but usually it can be safely set to false. It should only be to true after dramatic changes have been made in the storage structures",
       Boolean.class, true),
 
+  DIRECT_MEMORY_POOL_LIMIT("memory.pool.limit",
+      "Limit of the pages cached inside of direct memory pool to avoid frequent reallocation of memory in OS", Integer.class, 256),
+
   DIRECT_MEMORY_TRACK_MODE("memory.directMemory.trackMode",
       "Activates the direct memory pool [leak detector](Leak-Detector.md). This detector causes a large overhead and should be used for debugging "
           + "purposes only. It's also a good idea to pass the "
-          + "-Djava.util.logging.manager=com.orientechnologies.common.log.OLogManager$ShutdownLogManager switch to the JVM, "
+          + "-Djava.util.logging.manager=com.orientechnologies.common.log.ShutdownLogManager switch to the JVM, "
           + "if you use this mode, this will enable the logging from JVM shutdown hooks.", Boolean.class, false),
-
-  DIRECT_MEMORY_TRACE("memory.directMemory.trace",
-      "Activates [direct memory tracing](Direct-Memory-Tracing.md). The tracing causes a large overhead and should be used for"
-          + "debugging purposes only. False by default.", Boolean.class, false, (iCurrentValue, iNewValue) -> {
-    OByteBufferPool.instance().setTraceEnabled((Boolean) iNewValue);
-  }),
-
-  DIRECT_MEMORY_TRACE_AGGREGATION("memory.directMemory.trace.aggregation",
-      "Controls the aggregation level of the direct memory tracing. Possible values: 'none' – for no aggregation, events are "
-          + "traced one-by-one; 'low' – for low aggregation which provides more details; 'medium' (default) – provides medium "
-          + "level of details; 'high' – provides low level of details.", OByteBufferPool.TraceAggregation.class,
-      OByteBufferPool.TraceAggregation.Medium, (iCurrentValue, iNewValue) -> {
-    OByteBufferPool.instance().setTraceAggregation((OByteBufferPool.TraceAggregation) iNewValue);
-  }),
 
   DIRECT_MEMORY_ONLY_ALIGNED_ACCESS("memory.directMemory.onlyAlignedMemoryAccess",
       "Some architectures do not allow unaligned memory access or may suffer from speed degradation. For such platforms, this flag should be set to true",
@@ -194,12 +182,18 @@ public enum OGlobalConfiguration {
       + " 'storeAndSwitchReadOnlyMode' (default) - Same as 'storeAndVerify' with addition that storage will be switched in read only mode "
       + "till it will not be repaired.", OChecksumMode.class, OChecksumMode.StoreAndSwitchReadOnlyMode, false),
 
+  STORAGE_EXCLUSIVE_FILE_ACCESS("storage.exclusiveFileAccess", "Limit access to the datafiles to the single API user, set to "
+      + "true to prevent concurrent modification files by different instances of storage", Boolean.class, true),
+
+  STORAGE_TRACK_FILE_ACCESS("storage.trackFileAccess",
+      "Works only if storage.exclusiveFileAccess is set to true. " + "Tracks stack trace of thread which initially opened a file",
+      Boolean.class, true),
+
   @Deprecated STORAGE_CONFIGURATION_SYNC_ON_UPDATE("storage.configuration.syncOnUpdate",
       "Indicates a force sync should be performed for each update on the storage configuration", Boolean.class, true),
 
   STORAGE_COMPRESSION_METHOD("storage.compressionMethod", "Record compression method used in storage"
-      + " Possible values : gzip, nothing, snappy, snappy-native. Default is 'nothing' that means no compression", String.class,
-      "nothing"),
+      + " Possible values : gzip, nothing. Default is 'nothing' that means no compression", String.class, "nothing"),
 
   STORAGE_ENCRYPTION_METHOD("storage.encryptionMethod",
       "Record encryption method used in storage" + " Possible values : 'aes' and 'des'. Default is 'nothing' for no encryption",
@@ -249,7 +243,7 @@ public enum OGlobalConfiguration {
 
   WAL_MAX_SEGMENT_SIZE("storage.wal.maxSegmentSize", "Maximum size of single WAL segment (in megabytes)", Integer.class, 128),
 
-  WAL_MAX_SIZE("storage.wal.maxSize", "Maximum size of WAL on disk (in megabytes)", Integer.class, 4096),
+  WAL_MAX_SIZE("storage.wal.maxSize", "Maximum size of WAL on disk (in megabytes)", Integer.class, -1),
 
   WAL_COMMIT_TIMEOUT("storage.wal.commitTimeout", "Maximum interval between WAL commits (in ms.)", Integer.class, 1000),
 
@@ -494,6 +488,10 @@ public enum OGlobalConfiguration {
       "Maximum attempts, until a response can be read. Otherwise, the response will be dropped from the channel", Integer.class, 20,
       true),
 
+  NETWORK_BINARY_MIN_PROTOCOL_VERSION("network.binary.minProtocolVersion",
+      "Set the minimum enabled binary protocol version and disable all backward compatible behaviour for version previous the one specified",
+      Integer.class, 26, false),
+
   NETWORK_BINARY_DEBUG("network.binary.debug", "Debug mode: print all data incoming on the binary channel", Boolean.class, false,
       true),
 
@@ -636,6 +634,10 @@ public enum OGlobalConfiguration {
       Integer.class, 500),
 
   // QUERY
+  QUERY_REMOTE_RESULTSET_PAGE_SIZE("query.remoteResultSet.pageSize",
+      "The size of a remote ResultSet page, ie. the number of records"
+          + "that are fetched together during remote query execution. This has to be set on the client.", Integer.class, 100),
+
   QUERY_PARALLEL_AUTO("query.parallelAuto", "Auto enable parallel query, if requirements are met", Boolean.class, false),
 
   QUERY_PARALLEL_MINIMUM_RECORDS("query.parallelMinimumRecords",
@@ -722,7 +724,7 @@ public enum OGlobalConfiguration {
    * @Since 2.2.18
    */
   DISTRIBUTED_DUMP_STATS_EVERY("distributed.dumpStatsEvery", "Time in ms to dump the cluster stats. Set to 0 to disable such dump",
-      Long.class, 60000l, true),
+      Long.class, 0l, true),
 
   DISTRIBUTED_CRUD_TASK_SYNCH_TIMEOUT("distributed.crudTaskTimeout", "Maximum timeout (in ms) to wait for CRUD remote tasks",
       Long.class, 3000l, true),
@@ -862,6 +864,13 @@ public enum OGlobalConfiguration {
       "Try to execute an incremental backup first.", Boolean.class, true),
 
   /**
+   * @Since 2.2.27
+   */
+  @OApi(maturity = OApi.MATURITY.NEW) DISTRIBUTED_CHECKINTEGRITY_LAST_TX("distributed.checkIntegrityLastTxs",
+      "Before asking for a delta sync, checks the integrity of the records touched by the last X transactions committed on local server.",
+      Integer.class, 16),
+
+  /**
    * @Since 2.1
    */
   @OApi(maturity = OApi.MATURITY.NEW) DISTRIBUTED_CONCURRENT_TX_MAX_AUTORETRY("distributed.concurrentTxMaxAutoRetry",
@@ -942,7 +951,7 @@ public enum OGlobalConfiguration {
 
   CLOUD_PROJECT_ID("cloud.project.id", "The ID used to identify this project on the cloud platform", String.class, null),
 
-  CLOUD_BASE_URL("cloud.base.url", "The base URL of the cloud endpoint for requests", String.class, null),
+  CLOUD_BASE_URL("cloud.base.url", "The base URL of the cloud endpoint for requests", String.class, "cloud.orientdb.com"),
 
   /**
    * Deprecated in v2.2.0

@@ -1,6 +1,7 @@
 package com.orientechnologies.orient.server.network;
 
 import com.orientechnologies.common.exception.OException;
+import com.orientechnologies.common.io.OFileUtils;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.db.*;
@@ -17,6 +18,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
@@ -27,7 +29,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class OLiveQueryRemoteTest {
 
-  private static final String SERVER_DIRECTORY = "./target/dbfactory";
   private OServer           server;
   private OrientDB          orientDB;
   private ODatabaseDocument database;
@@ -36,7 +37,6 @@ public class OLiveQueryRemoteTest {
   public void before() throws Exception {
     OGlobalConfiguration.SERVER_BACKWARD_COMPATIBILITY.setValue(false);
     server = new OServer(false);
-    server.setServerRootDirectory(SERVER_DIRECTORY);
     server.startup(
         getClass().getClassLoader().getResourceAsStream("com/orientechnologies/orient/server/network/orientdb-server-config.xml"));
     server.activate();
@@ -50,11 +50,9 @@ public class OLiveQueryRemoteTest {
     database.close();
     orientDB.close();
     server.shutdown();
-  }
 
-  @AfterClass
-  public static void afterClass() {
     Orient.instance().shutdown();
+    OFileUtils.deleteRecursively(new File(server.getDatabaseDirectory()));
     Orient.instance().startup();
   }
 

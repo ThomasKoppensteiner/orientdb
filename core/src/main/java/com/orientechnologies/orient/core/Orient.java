@@ -35,6 +35,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import com.orientechnologies.common.directmemory.OByteBufferPool;
+import com.orientechnologies.common.directmemory.ODirectMemoryAllocator;
 import com.orientechnologies.common.io.OFileUtils;
 import com.orientechnologies.common.listener.OListenerManger;
 import com.orientechnologies.common.log.OLogManager;
@@ -252,6 +253,9 @@ public class Orient extends OListenerManger<OOrientListener> {
       if (timer == null)
         timer = new Timer(true);
 
+      OByteBufferPool.instance().registerMBean();
+      ODirectMemoryAllocator.instance().registerMBean();
+
       profiler = new OProfilerStub(false);
 
       shutdownHook = new OrientShutdownHook();
@@ -384,6 +388,16 @@ public class Orient extends OListenerManger<OOrientListener> {
       }
 
       shutdownHandlers.clear();
+
+      OLogManager.instance().info(this, "Clearing byte buffer pool");
+      OByteBufferPool.instance().clear();
+
+      OByteBufferPool.instance().checkMemoryLeaks();
+      ODirectMemoryAllocator.instance().checkMemoryLeaks();
+
+      OByteBufferPool.instance().unregisterMBean();
+      ODirectMemoryAllocator.instance().unregisterMBean();
+
       OLogManager.instance().info(this, "OrientDB Engine shutdown complete");
       OLogManager.instance().flush();
     } finally {
@@ -399,23 +413,6 @@ public class Orient extends OListenerManger<OOrientListener> {
     }
 
     return this;
-  }
-
-  /**
-   * This method is called once JVM Error is observed by OrientDB to be thrown. Typically it means that all storages will be put in
-   * read-only mode and user will be asked to restart JVM.
-   *
-   * @param e Error happened during JVM execution
-   */
-  public void handleJVMError(Error e) {
-    engineLock.readLock().lock();
-    try {
-      for (OrientDBInternal orientDB : runningInstances) {
-        orientDB.handleJVMError(e);
-      }
-    } finally {
-      engineLock.readLock().unlock();
-    }
   }
 
   public void scheduleTask(final TimerTask task, final long delay, final long period) {
@@ -492,7 +489,7 @@ public class Orient extends OListenerManger<OOrientListener> {
     return os.contains("win");
   }
 
-  protected void registerEngine(final OEngine iEngine) throws IllegalArgumentException {
+  public void registerEngine(final OEngine iEngine) throws IllegalArgumentException {
     OEngine oEngine = engines.get(iEngine.getName());
 
     if (oEngine != null) {
@@ -791,7 +788,6 @@ public class Orient extends OListenerManger<OOrientListener> {
         internal.internalClose();
       }
       runningInstances.clear();
-      OByteBufferPool.instance().verifyState();
     }
 
     @Override

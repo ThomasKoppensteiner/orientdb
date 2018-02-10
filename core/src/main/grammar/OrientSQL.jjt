@@ -377,6 +377,10 @@ TOKEN:
 	|
 	< USER: ( "u" | "U" ) ( "s" | "S" ) ( "e" | "E" ) ( "r" | "R" ) >
 	|
+	< RID: ( "r" | "R" ) ( "i" | "I" ) ( "d" | "D" ) >
+	|
+	< DEFAULTCLUSTER: ( "D" | "d") ( "E" | "e") ( "F" | "f") ( "A" | "a") ( "U" | "u") ( "L" | "l") ( "T" | "t") ( "C" | "c" ) ( "L" | "l" ) ( "U" | "u" ) ( "S" | "s" ) ( "T" | "t" ) ( "E" | "e" ) ( "R" | "r" ) >
+	|
 	< THIS: "@" ( ( "t" | "T" ) ( "h" | "H" ) ( "i" | "I" ) ( "s" | "S" ) ) >
 	|
 	< RECORD_ATTRIBUTE: <RID_ATTR> | <CLASS_ATTR> | <VERSION_ATTR> | <SIZE_ATTR> | <TYPE_ATTR> | <RAW_ATTR> | <RID_ID_ATTR> | <RID_POS_ATTR> | <FIELDS_ATTR> >
@@ -891,6 +895,10 @@ OIdentifier Identifier():
     token = <ROLE>
     |
     token = <USER>
+    |
+    token = <RID>
+    |
+    token = <DEFAULTCLUSTER>
     |
     quotedToken = <QUOTED_IDENTIFIER>
 ) {
@@ -3086,7 +3094,14 @@ OBooleanExpression InCondition():
 	jjtThis.operator = InOperator()
 	(
 	    LOOKAHEAD(2)
-	    ( <LPAREN> jjtThis.rightStatement = SelectStatement() <RPAREN>)
+	    ( <LPAREN>
+	      (
+	         LOOKAHEAD(SelectStatement())(jjtThis.rightStatement = SelectStatement())
+	         |
+	         jjtThis.rightStatement = SelectWithoutTargetStatement()
+	      )
+	      <RPAREN>
+	    )
 	    |
 	    LOOKAHEAD(2)
 	    ( <LPAREN> jjtThis.rightParam = InputParameter() <RPAREN>)
@@ -3105,7 +3120,14 @@ OBooleanExpression NotInCondition():
     	jjtThis.left = Expression() <NOT> InOperator()
     	(
             LOOKAHEAD(2)
-            ( <LPAREN> jjtThis.rightStatement = SelectStatement() <RPAREN>)
+            ( <LPAREN>
+              (
+                 LOOKAHEAD(SelectStatement())(jjtThis.rightStatement = SelectStatement())
+                 |
+                 jjtThis.rightStatement = SelectWithoutTargetStatement()
+              )
+              <RPAREN>
+            )
             |
             LOOKAHEAD(2)
             ( <LPAREN> jjtThis.rightParam = InputParameter() <RPAREN>)
@@ -3626,7 +3648,7 @@ OMatchFilter MatchFilter():
 }
 
 OMatchFilterItem MatchFilterItem():
-{}
+{Token lastToken;}
 {
     (
         (
@@ -3635,6 +3657,27 @@ OMatchFilterItem MatchFilterItem():
         |
         (
             <CLASSES> <COLON> jjtThis.classNames = Expression()
+        )
+        |
+        (
+            <CLUSTER> <COLON>
+            (
+               jjtThis.clusterName = Identifier()
+               |
+               jjtThis.clusterId = Integer()
+            )
+        )
+        |
+        (
+            (
+                lastToken = <CLUSTER_IDENTIFIER> {jjtThis.clusterName = new OIdentifier(lastToken.image.split(":")[1]);}
+                |
+                lastToken = <CLUSTER_NUMBER_IDENTIFIER> {jjtThis.clusterId = new OInteger(-1); jjtThis.clusterId.setValue(Integer.parseInt(lastToken.image.split(":")[1]));}
+            )
+        )
+        |
+        (
+            <RID> <COLON> jjtThis.rid = Rid()
         )
         |
         (
@@ -4138,6 +4181,15 @@ OAlterClassStatement AlterClassStatement():
 				<NULL>
 			)
 		)
+		|
+        (
+            <DEFAULTCLUSTER>
+            (
+                jjtThis.defaultClusterId = Integer()
+                |
+                jjtThis.defaultClusterName = Identifier()
+            )
+        )
 	)
 	[ <UNSAFE> { jjtThis.unsafe = true; } ]
 	{ return jjtThis; }

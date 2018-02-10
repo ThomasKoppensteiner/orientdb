@@ -95,11 +95,13 @@ public class OServer {
   private String                   serverRootDirectory;
   private String                   databaseDirectory;
   private OClientConnectionManager clientConnectionManager;
+  private OPushManager             pushManager;
   private ClassLoader              extensionClassLoader;
   private OTokenHandler            tokenHandler;
   private OSystemDatabase          systemDatabase;
   private OrientDB                 context;
   private OrientDBInternal         databases;
+  protected Date startedOn = new Date();
 
   public OServer()
       throws ClassNotFoundException, MalformedObjectNameException, NullPointerException, InstanceAlreadyExistsException,
@@ -139,6 +141,36 @@ public class OServer {
     }
   }
 
+  public static OServer startFromFileConfig(String config)
+      throws ClassNotFoundException, MalformedObjectNameException, InstanceAlreadyExistsException, NotCompliantMBeanException,
+      MBeanRegistrationException, InvocationTargetException, NoSuchMethodException, InstantiationException, IOException,
+      IllegalAccessException {
+    OServer server = new OServer(false);
+    server.startup(config);
+    server.activate();
+    return server;
+  }
+
+  public static OServer startFromClasspathConfig(String config)
+      throws ClassNotFoundException, MalformedObjectNameException, InstanceAlreadyExistsException, NotCompliantMBeanException,
+      MBeanRegistrationException, InvocationTargetException, NoSuchMethodException, InstantiationException, IOException,
+      IllegalAccessException {
+    OServer server = new OServer(false);
+    server.startup(Thread.currentThread().getContextClassLoader().getResourceAsStream(config));
+    server.activate();
+    return server;
+  }
+
+  public static OServer startFromStreamConfig(InputStream config)
+      throws ClassNotFoundException, MalformedObjectNameException, InstanceAlreadyExistsException, NotCompliantMBeanException,
+      MBeanRegistrationException, InvocationTargetException, NoSuchMethodException, InstantiationException, IOException,
+      IllegalAccessException {
+    OServer server = new OServer(false);
+    server.startup(config);
+    server.activate();
+    return server;
+  }
+
   public static OServer getInstance(final String iServerId) {
     return distributedServers.get(iServerId);
   }
@@ -153,6 +185,10 @@ public class OServer {
 
   public static void registerServerInstance(final String iServerId, final OServer iServer) {
     distributedServers.put(iServerId, iServer);
+  }
+
+  public static void unregisterServerInstance(final String iServerId) {
+    distributedServers.remove(iServerId);
   }
 
   /**
@@ -186,6 +222,10 @@ public class OServer {
     return clientConnectionManager;
   }
 
+  public OPushManager getPushManager() {
+    return pushManager;
+  }
+
   public void saveConfiguration() throws IOException {
     serverCfg.saveConfiguration();
   }
@@ -203,6 +243,10 @@ public class OServer {
 
   public OSystemDatabase getSystemDatabase() {
     return systemDatabase;
+  }
+
+  public String getServerId() {
+    return getSystemDatabase().getServerId();
   }
 
   /**
@@ -302,6 +346,7 @@ public class OServer {
       shutdownLatch = new CountDownLatch(1);
 
     clientConnectionManager = new OClientConnectionManager(this);
+    pushManager = new OPushManager();
     rejectRequests = false;
 
     initFromConfiguration();
@@ -460,11 +505,6 @@ public class OServer {
   public boolean shutdown() {
     try {
       boolean res = deinit();
-
-      if (!getContextConfiguration().getValueAsBoolean(OGlobalConfiguration.SERVER_BACKWARD_COMPATIBILITY) && databases != null) {
-        databases.close();
-        databases = null;
-      }
       return res;
     } finally {
       startupLatch = null;
@@ -527,6 +567,7 @@ public class OServer {
           }
 
         rejectRequests = true;
+        pushManager.shutdown();
         clientConnectionManager.shutdown();
 
         if (pluginManager != null)
@@ -547,6 +588,10 @@ public class OServer {
         } catch (Exception e) {
           OLogManager.instance().error(this, "Error during OrientDB shutdown", e);
         }
+      if (!getContextConfiguration().getValueAsBoolean(OGlobalConfiguration.SERVER_BACKWARD_COMPATIBILITY) && databases != null) {
+        databases.close();
+        databases = null;
+      }
     } finally {
       OLogManager.instance().info(this, "OrientDB Server shutdown complete\n");
       OLogManager.instance().flush();
@@ -952,21 +997,21 @@ public class OServer {
     /*
      * String type; for (OServerStorageConfiguration stg : configuration.storages) if (stg.loadOnStartup) { // @COMPATIBILITY if
      * (stg.userName == null) stg.userName = OUser.ADMIN; if (stg.userPassword == null) stg.userPassword = OUser.ADMIN;
-     * 
+     *
      * int idx = stg.path.indexOf(':'); if (idx == -1) { OLogManager.instance().error(this, "-> Invalid path '" + stg.path +
      * "' for database '" + stg.name + "'"); return; } type = stg.path.substring(0, idx);
-     * 
+     *
      * ODatabaseDocument db = null; try { db = new ODatabaseDocumentTx(stg.path);
-     * 
+     *
      * if (db.exists()) db.open(stg.userName, stg.userPassword); else { db.create(); if (stg.userName.equals(OUser.ADMIN)) { if
      * (!stg.userPassword.equals(OUser.ADMIN)) // CHANGE ADMIN PASSWORD
      * db.getMetadata().getSecurity().getUser(OUser.ADMIN).setPassword(stg.userPassword); } else { // CREATE A NEW USER AS ADMIN AND
      * REMOVE THE DEFAULT ONE db.getMetadata().getSecurity().createUser(stg.userName, stg.userPassword, ORole.ADMIN);
      * db.getMetadata().getSecurity().dropUser(OUser.ADMIN); db.close(); db.open(stg.userName, stg.userPassword); } }
-     * 
+     *
      * OLogManager.instance().info(this, "-> Loaded " + type + " database '" + stg.name + "'"); } catch (Exception e) {
      * OLogManager.instance().error(this, "-> Cannot load " + type + " database '" + stg.name + "': " + e);
-     * 
+     *
      * } finally { if (db != null) db.close(); } }
      */
     for (OServerStorageConfiguration stg : configuration.storages) {
@@ -1188,5 +1233,9 @@ public class OServer {
 
   public void restore(String name, String path) {
     databases.restore(name, null, null, null, path, OrientDBConfig.defaultConfig());
+  }
+
+  public Date getStartedOn() {
+    return startedOn;
   }
 }

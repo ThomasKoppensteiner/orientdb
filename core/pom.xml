@@ -37,7 +37,6 @@
             javax.imageio.spi,sun.misc;resolution:=optional,
             com.orientechnologies.orient.client.remote;resolution:=optional,
             com.sun.jna;resolution:=optional,
-            org.xerial.snappy;resolution:=optional,
             sun.nio.ch;resolution:=optional,
             com.orientechnologies.orient.server.distributed.impl;resolution:=optional,
             com.orientechnologies.orient.server.distributed.impl.task;resolution:=optional,
@@ -51,7 +50,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <argLine>-ea
             -Xmx${heapSize}
-            -XX:MaxDirectMemorySize=512g
             -Dstorage.diskCache.bufferSize=4096
             -Dindex.flushAfterCreate=false
             -Dstorage.makeFullCheckpointAfterCreate=false
@@ -63,7 +61,7 @@
             -Ddb.makeFullCheckpointOnSchemaChange=false
             -Dsecurity.userPasswordSaltIterations=10
             -Dmemory.directMemory.trackMode=true
-            -Djava.util.logging.manager=com.orientechnologies.common.log.OLogManager$ShutdownLogManager
+            -Djava.util.logging.manager=com.orientechnologies.common.log.ShutdownLogManager
             -Dstorage.diskCache.checksumMode=storeAndThrow
         </argLine>
     </properties>
@@ -239,12 +237,6 @@
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna-platform</artifactId>
             <version>4.5.0</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.xerial.snappy</groupId>
-            <artifactId>snappy-java</artifactId>
-            <version>1.1.0.1</version>
         </dependency>
 
         <dependency>

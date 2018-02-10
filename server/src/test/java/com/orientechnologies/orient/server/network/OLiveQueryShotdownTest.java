@@ -2,9 +2,11 @@ package com.orientechnologies.orient.server.network;
 
 import static org.junit.Assert.assertTrue;
 
+import java.io.File;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import com.orientechnologies.common.io.OFileUtils;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -21,12 +23,10 @@ import com.orientechnologies.orient.server.OServer;
 @Ignore
 public class OLiveQueryShotdownTest {
 
-  private static final String SERVER_DIRECTORY = "./target/db";
   private OServer             server;
 
   public void bootServer() throws Exception {
     server = new OServer(false);
-    server.setServerRootDirectory(SERVER_DIRECTORY);
     server.startup(getClass().getResourceAsStream("orientdb-server-config.xml"));
     server.activate();
 
@@ -38,6 +38,8 @@ public class OLiveQueryShotdownTest {
 
   public void shutdownServer() {
     server.shutdown();
+    Orient.instance().shutdown();
+    OFileUtils.deleteRecursively(new File(server.getDatabaseDirectory()));
     Orient.instance().startup();
   }
 

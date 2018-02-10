@@ -23,9 +23,9 @@ echo "      ...,::,,,,::.. \`:  .,,  :,    :   :     :   .:    :::::::::::   :::
 echo "           ,::::,,,. \`:   ,,   :::::    :     :   .:    :::::::::     ::::::::::  "
 echo "           ,,:\` \`,,.                                  "
 echo "          ,,,    .,\`                                  "
-echo "         ,,.     \`,                                          GRAPH DATABASE  "
+echo "         ,,.     \`,                                              VELOCE  "
 echo "       \`\`        \`.                                                          "
-echo "                 \`\`                                          orientdb.com"
+echo "                 \`\`                                       www.orientdb.com"
 echo "                 \`                                    "
 
 # resolve links - $0 may be a softlink
@@ -103,7 +103,7 @@ if [ -z "$ORIENTDB_OPTS_MEMORY" ] ; then
 fi
 
 if [ -z "$JAVA_OPTS_SCRIPT" ] ; then
-    JAVA_OPTS_SCRIPT="-Djna.nosys=true -XX:+HeapDumpOnOutOfMemoryError -XX:MaxDirectMemorySize=512g -Djava.awt.headless=true -Dfile.encoding=UTF8 -Drhino.opt.level=9"
+    JAVA_OPTS_SCRIPT="-Djna.nosys=true -XX:+HeapDumpOnOutOfMemoryError -Djava.awt.headless=true -Dfile.encoding=UTF8 -Drhino.opt.level=9"
 fi
 
 # ORIENTDB SETTINGS LIKE DISKCACHE, ETC

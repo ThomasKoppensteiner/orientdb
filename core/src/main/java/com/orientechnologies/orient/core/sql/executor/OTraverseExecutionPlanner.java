@@ -183,7 +183,7 @@ public class OTraverseExecutionPlanner {
       }
 
       result.chain(new FetchFromIndexStep(index, null, null, ctx, profilingEnabled));
-      result.chain(new GetValueFromIndexEntryStep(ctx, profilingEnabled));
+      result.chain(new GetValueFromIndexEntryStep(ctx, null, profilingEnabled));
       break;
     case VALUES:
     case VALUESASC:
@@ -191,14 +191,14 @@ public class OTraverseExecutionPlanner {
         throw new OCommandExecutionException("Index " + indexName + " does not allow iteration on values");
       }
       result.chain(new FetchFromIndexValuesStep(index, true, ctx, profilingEnabled));
-      result.chain(new GetValueFromIndexEntryStep(ctx, profilingEnabled));
+      result.chain(new GetValueFromIndexEntryStep(ctx, null, profilingEnabled));
       break;
     case VALUESDESC:
       if (!index.supportsOrderedIterations()) {
         throw new OCommandExecutionException("Index " + indexName + " does not allow iteration on values");
       }
       result.chain(new FetchFromIndexValuesStep(index, false, ctx, profilingEnabled));
-      result.chain(new GetValueFromIndexEntryStep(ctx, profilingEnabled));
+      result.chain(new GetValueFromIndexEntryStep(ctx, null, profilingEnabled));
       break;
     }
   }
@@ -207,9 +207,9 @@ public class OTraverseExecutionPlanner {
     ODatabaseInternal db = (ODatabaseInternal) ctx.getDatabase();
     String schemaRecordIdAsString = null;
     if (metadata.getName().equalsIgnoreCase(OCommandExecutorSQLAbstract.METADATA_SCHEMA)) {
-      schemaRecordIdAsString = db.getStorage().getConfiguration().schemaRecordId;
+      schemaRecordIdAsString = db.getStorage().getConfiguration().getSchemaRecordId();
     } else if (metadata.getName().equalsIgnoreCase(OCommandExecutorSQLAbstract.METADATA_INDEXMGR)) {
-      schemaRecordIdAsString = db.getStorage().getConfiguration().indexMgrRecordId;
+      schemaRecordIdAsString = db.getStorage().getConfiguration().getIndexMgrRecordId();
     } else {
       throw new UnsupportedOperationException("Invalid metadata: " + metadata.getName());
     }

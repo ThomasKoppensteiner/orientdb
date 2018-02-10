@@ -25,25 +25,26 @@ import java.nio.charset.Charset;
 
 import com.orientechnologies.common.exception.OException;
 import com.orientechnologies.orient.core.config.OContextConfiguration;
-import com.orientechnologies.orient.core.config.OStorageConfiguration;
+import com.orientechnologies.orient.core.config.OStorageConfigurationImpl;
 import com.orientechnologies.orient.core.exception.OSerializationException;
 import com.orientechnologies.orient.core.storage.OStorage;
+import com.orientechnologies.orient.core.storage.impl.local.OAbstractPaginatedStorage;
 
 /**
  * @author Andrey Lomakin (a.lomakin-at-orientdb.com)
  * @since 7/15/14
  */
-public class OStorageMemoryConfiguration extends OStorageConfiguration {
+public class OStorageMemoryConfiguration extends OStorageConfigurationImpl {
   private static final long serialVersionUID = 7001342008735208586L;
 
   private byte[] serializedContent;
 
-  public OStorageMemoryConfiguration(OStorage iStorage) {
+  public OStorageMemoryConfiguration(OAbstractPaginatedStorage iStorage) {
     super(iStorage, Charset.forName("UTF-8"));
   }
 
   @Override
-  public OStorageConfiguration load(final OContextConfiguration configuration) throws OSerializationException {
+  public OStorageConfigurationImpl load(final OContextConfiguration configuration) throws OSerializationException {
     initConfiguration(configuration);
 
     try {
@@ -62,6 +63,10 @@ public class OStorageMemoryConfiguration extends OStorageConfiguration {
     } catch (Exception e) {
       throw OException.wrapException(new OSerializationException("Error on update storage configuration"), e);
     }
+    if (updateListener != null) {
+      updateListener.onUpdate(this);
+    }
+
   }
 
   @Override

@@ -13,15 +13,16 @@ public class OCacheEntryChanges implements OCacheEntry {
 
   OCacheEntry delegate;
   final OWALChanges changes = new OWALPageChangesPortion();
-  OLogSequenceNumber lsn     = null;
+
   boolean            isNew   = false;
   boolean            pinPage = false;
 
   public OCacheEntryChanges(OCacheEntry entry) {
     delegate = entry;
   }
-  public OCacheEntryChanges(){
 
+  @SuppressWarnings("WeakerAccess")
+  public OCacheEntryChanges() {
   }
 
   @Override

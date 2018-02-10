@@ -2,9 +2,11 @@
 /* JavaCCOptions:MULTI=true,NODE_USES_PARSER=false,VISITOR=true,TRACK_TOKENS=true,NODE_PREFIX=O,NODE_EXTENDS=,NODE_FACTORY=,SUPPORT_CLASS_VISIBILITY_PUBLIC=true */
 package com.orientechnologies.orient.core.sql.parser;
 
+import com.orientechnologies.orient.core.collate.OCollate;
 import com.orientechnologies.orient.core.command.OCommandContext;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OCommandExecutionException;
+import com.orientechnologies.orient.core.record.OElement;
 import com.orientechnologies.orient.core.serialization.serializer.OStringSerializerHelper;
 import com.orientechnologies.orient.core.sql.executor.AggregationContext;
 import com.orientechnologies.orient.core.sql.executor.OResult;
@@ -191,9 +193,9 @@ public class OBaseExpression extends OMathExpression {
   }
 
   /**
-   * tests if current expression is an indexed function AND the function has also to be executed after the index search.
-   * In some cases, the index search is accurate, so this condition can be excluded from further evaluation. In other cases
-   * the result from the index is a superset of the expected result, so the function has to be executed anyway for further filtering
+   * tests if current expression is an indexed function AND the function has also to be executed after the index search. In some
+   * cases, the index search is accurate, so this condition can be excluded from further evaluation. In other cases the result from
+   * the index is a superset of the expected result, so the function has to be executed anyway for further filtering
    *
    * @param target  the query target
    * @param context the execution context
@@ -211,6 +213,11 @@ public class OBaseExpression extends OMathExpression {
   @Override
   public boolean isBaseIdentifier() {
     return identifier != null && modifier == null && identifier.isBaseIdentifier();
+  }
+
+  @Override
+  public OCollate getCollate(OResult currentRecord, OCommandContext ctx) {
+    return identifier != null && modifier == null ? identifier.getCollate(currentRecord, ctx) : null;
   }
 
   public boolean isEarlyCalculated() {
@@ -413,6 +420,41 @@ public class OBaseExpression extends OMathExpression {
     if (fromResult.getProperty("modifier") != null) {
       modifier = new OModifier(-1);
       modifier.deserialize(fromResult.getProperty("modifier"));
+    }
+  }
+
+  @Override
+  public boolean isDefinedFor(OResult currentRecord) {
+    if (this.identifier != null) {
+      if (modifier == null) {
+        return identifier.isDefinedFor(currentRecord);
+      }
+
+    }
+    return true;
+
+  }
+
+  @Override
+  public boolean isDefinedFor(OElement currentRecord) {
+    if (this.identifier != null) {
+      if (modifier == null) {
+        return identifier.isDefinedFor(currentRecord);
+      }
+
+    }
+    return true;
+  }
+
+  public void extractSubQueries(OIdentifier letAlias, SubQueryCollector collector) {
+    if (this.identifier != null) {
+      this.identifier.extractSubQueries(letAlias, collector);
+    }
+  }
+
+  public void extractSubQueries(SubQueryCollector collector) {
+    if (this.identifier != null) {
+      this.identifier.extractSubQueries(collector);
     }
   }
 }

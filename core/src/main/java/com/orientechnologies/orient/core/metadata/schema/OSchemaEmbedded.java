@@ -96,12 +96,19 @@ public class OSchemaEmbedded extends OSchemaShared {
 
         if (clusters == 0)
           cmd.append(" abstract");
-        else {
-          cmd.append(" clusters ");
-          cmd.append(clusters);
-        }
         final int[] clusterIds = createClusters(database, className, clusters);
         createClassInternal(database, className, clusterIds, superClassesList);
+
+        if (clusters > 0) {
+          cmd.append(" cluster ");
+          for (int i = 0; i < clusterIds.length; ++i) {
+            if (i > 0)
+              cmd.append(',');
+            else
+              cmd.append(' ');
+            cmd.append(clusterIds[i]);
+          }
+        }
 
         final OAutoshardedStorage autoshardedStorage = (OAutoshardedStorage) storage;
         OCommandSQL commandSQL = new OCommandSQL(cmd.toString());
@@ -515,6 +522,39 @@ public class OSchemaEmbedded extends OSchemaShared {
   }
 
   public void checkEmbedded() {
+  }
+
+  void addClusterForClass(ODatabaseDocumentInternal database, final int clusterId, final OClass cls) {
+    acquireSchemaWriteLock(database);
+    try {
+      if (clusterId < 0)
+        return;
+
+      checkEmbedded();
+
+      final OClass existingCls = clustersToClasses.get(clusterId);
+      if (existingCls != null && !cls.equals(existingCls))
+        throw new OSchemaException(
+            "Cluster with id " + clusterId + " already belongs to class " + clustersToClasses.get(clusterId));
+
+      clustersToClasses.put(clusterId, cls);
+    } finally {
+      releaseSchemaWriteLock(database);
+    }
+  }
+
+  void removeClusterForClass(ODatabaseDocumentInternal database, int clusterId, OClass cls) {
+    acquireSchemaWriteLock(database);
+    try {
+      if (clusterId < 0)
+        return;
+
+      checkEmbedded();
+
+      clustersToClasses.remove(clusterId);
+    } finally {
+      releaseSchemaWriteLock(database);
+    }
   }
 
 }

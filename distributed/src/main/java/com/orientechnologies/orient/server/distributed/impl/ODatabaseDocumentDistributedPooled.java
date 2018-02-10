@@ -13,15 +13,17 @@ public class ODatabaseDocumentDistributedPooled extends ODatabaseDocumentDistrib
 
   private ODatabasePoolInternal pool;
 
-  public ODatabaseDocumentDistributedPooled(ODatabasePoolInternal pool, OStorage storage,
-      OHazelcastPlugin hazelcastPlugin) {
+  public ODatabaseDocumentDistributedPooled(ODatabasePoolInternal pool, OStorage storage, OHazelcastPlugin hazelcastPlugin) {
     super(storage, hazelcastPlugin);
     this.pool = pool;
   }
 
   @Override
   public void close() {
+    if (isClosed())
+      return;
     closeActiveQueries();
+    rollback(true);
     super.setStatus(STATUS.CLOSED);
     ODatabaseRecordThreadLocal.instance().remove();
     getLocalCache().clear();

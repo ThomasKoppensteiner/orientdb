@@ -46,9 +46,7 @@ import java.util.concurrent.locks.Lock;
 /**
  * Tree-based dictionary algorithm. Similar to {@link OSBTree} but uses subpages of disk cache that is more efficient for small data
  * structures.
- * <p>
  * Oriented for usage of several instances inside of one file.
- * <p>
  * Creation of several instances that represent the same collection is not allowed.
  *
  * @author Andrey Lomakin (a.lomakin-at-orientdb.com)
@@ -262,7 +260,7 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
         releasePageFromWrite(atomicOperation, keyBucketCacheEntry);
 
         if (!itemFound)
-          setSize(size() + 1, atomicOperation);
+          updateSize(1, atomicOperation);
 
         endAtomicOperation(false, null);
         return result;
@@ -500,6 +498,18 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
     }
   }
 
+  private void updateSize(long diffSize, OAtomicOperation atomicOperation) throws IOException {
+    OCacheEntry rootCacheEntry = loadPageForWrite(atomicOperation, fileId, rootBucketPointer.getPageIndex(), false);
+
+    try {
+      OSBTreeBonsaiBucket<K, V> rootBucket = new OSBTreeBonsaiBucket<K, V>(rootCacheEntry, rootBucketPointer.getPageOffset(),
+          keySerializer, valueSerializer, this);
+      rootBucket.setTreeSize(rootBucket.getTreeSize() + diffSize);
+    } finally {
+      releasePageFromWrite(atomicOperation, rootCacheEntry);
+    }
+  }
+
   private void setSize(long size, OAtomicOperation atomicOperation) throws IOException {
     OCacheEntry rootCacheEntry = loadPageForWrite(atomicOperation, fileId, rootBucketPointer.getPageIndex(), false);
 
@@ -580,7 +590,7 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
         } finally {
           releasePageFromWrite(atomicOperation, keyBucketCacheEntry);
         }
-        setSize(size() - 1, atomicOperation);
+        updateSize(-1, atomicOperation);
 
         endAtomicOperation(false, null);
         return removed;
@@ -719,10 +729,8 @@ public class OSBTreeBonsaiLocal<K, V> extends ODurableComponent implements OSBTr
   /**
    * Load all entries with key greater then specified key.
    *
-   * @param key          defines
-   * @param inclusive    if true entry with given key is included
-   * @param ascSortOrder
-   * @param listener
+   * @param key       defines
+   * @param inclusive if true entry with given key is included
    */
   @Override
   public void loadEntriesMajor(K key, boolean inclusive, boolean ascSortOrder, RangeResultListener<K, V> listener) {

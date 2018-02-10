@@ -1,6 +1,6 @@
 @echo off
 rem
-rem Copyright (c) Orient Technologies LTD (http://www.orientechnologies.com)
+rem Copyright (c) OrientDB LTD (http://www.orientdb.com)
 rem
 
 echo            .                                          
@@ -23,9 +23,9 @@ echo       ...,::,,,,::.. `:  .,,  :,    :   :     :   .:    :::::::::::   :::  
 echo            ,::::,,,. `:   ,,   :::::    :     :   .:    :::::::::     ::::::::::
 echo            ,,:` `,,.                                  
 echo           ,,,    .,`                                  
-echo          ,,.     `,                                          GRAPH DATABASE
+echo          ,,.     `,                                              VELOCE
 echo        ``        `.                                         
-echo                  ``                                         www.orientdb.org
+echo                  ``                                         www.orientdb.com
 echo                  `                                    
 
 rem Guess ORIENTDB_HOME if not defined
@@ -65,20 +65,12 @@ goto setArgs
 :doneSetArgs
 
 
-if "%PROCESSOR_ARCHITECTURE%"=="AMD64" goto 64BIT
-set JAVA_MAX_DIRECT=-XX:MaxDirectMemorySize=2g
-goto END
-:64BIT
-set JAVA_MAX_DIRECT=-XX:MaxDirectMemorySize=512g
-
-:END
-
 if NOT exist "%CONFIG_FILE%" set CONFIG_FILE=%ORIENTDB_HOME%/config/orientdb-server-config.xml
 
 set LOG_FILE=%ORIENTDB_HOME%/config/orientdb-server-log.properties
 set WWW_PATH=%ORIENTDB_HOME%/www
 set ORIENTDB_SETTINGS=-Dprofiler.enabled=true
-set JAVA_OPTS_SCRIPT= -Djna.nosys=true %JAVA_MAX_DIRECT% -XX:+HeapDumpOnOutOfMemoryError -Djava.awt.headless=true -Dfile.encoding=UTF8 -Drhino.opt.level=9
+set JAVA_OPTS_SCRIPT= -Djna.nosys=true -XX:+HeapDumpOnOutOfMemoryError -Djava.awt.headless=true -Dfile.encoding=UTF8 -Drhino.opt.level=9
 
 rem TO DEBUG ORIENTDB SERVER RUN IT WITH THESE OPTIONS:
 rem -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=1044
@@ -89,6 +81,6 @@ set MAXHEAP=-Xms2G -Xmx2G
 rem ORIENTDB MAXIMUM DISKCACHE IN MB, EXAMPLE: "-Dstorage.diskCache.bufferSize=8192" FOR 8GB of DISKCACHE
 set MAXDISKCACHE=
 
-call %JAVA% -server %JAVA_OPTS% %MAXHEAP% %JAVA_OPTS_SCRIPT% %ORIENTDB_SETTINGS% %MAXDISKCACHE% -Djava.util.logging.manager=com.orientechnologies.common.log.OLogManager$ShutdownLogManager -Djava.util.logging.config.file="%LOG_FILE%" -Dorientdb.config.file="%CONFIG_FILE%" -Dorientdb.www.path="%WWW_PATH%" -Dorientdb.build.number="@BUILD@" -cp "%ORIENTDB_HOME%\lib\*;%ORIENTDB_HOME%\plugins\*" %CMD_LINE_ARGS% com.orientechnologies.orient.server.OServerMain
+call %JAVA% -server %JAVA_OPTS% %MAXHEAP% %JAVA_OPTS_SCRIPT% %ORIENTDB_SETTINGS% %MAXDISKCACHE% -Djava.util.logging.manager=com.orientechnologies.common.log.ShutdownLogManager -Djava.util.logging.config.file="%LOG_FILE%" -Dorientdb.config.file="%CONFIG_FILE%" -Dorientdb.www.path="%WWW_PATH%" -Dorientdb.build.number="@BUILD@" -cp "%ORIENTDB_HOME%\lib\*;%ORIENTDB_HOME%\plugins\*" %CMD_LINE_ARGS% com.orientechnologies.orient.server.OServerMain
 
 :end

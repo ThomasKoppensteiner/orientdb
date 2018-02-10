@@ -1,5 +1,6 @@
 package com.orientechnologies.orient.server.network;
 
+import com.orientechnologies.common.io.OFileUtils;
 import com.orientechnologies.orient.client.remote.OServerAdmin;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.command.script.OCommandScript;
@@ -28,13 +29,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class BinaryProtocolAnyResultTest {
 
-  private static final String SERVER_DIRECTORY = "./target/db";
   private OServer server;
 
   @Before
   public void before() throws Exception {
     server = new OServer(false);
-    server.setServerRootDirectory(SERVER_DIRECTORY);
     server.startup(getClass().getResourceAsStream("orientdb-server-config.xml"));
     server.activate();
   }
@@ -65,12 +64,9 @@ public class BinaryProtocolAnyResultTest {
   @After
   public void after() {
     server.shutdown();
-  }
 
-  @AfterClass
-  public static void afterClass() {
     Orient.instance().shutdown();
+    OFileUtils.deleteRecursively(new File(server.getDatabaseDirectory()));
     Orient.instance().startup();
   }
-
 }

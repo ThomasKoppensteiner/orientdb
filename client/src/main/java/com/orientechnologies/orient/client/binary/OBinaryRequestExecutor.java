@@ -11,6 +11,8 @@ public interface OBinaryRequestExecutor {
 
   OBinaryResponse executeDBReload(OReloadRequest request);
 
+  OBinaryResponse executeDBReload(OReloadRequest37 request);
+
   OBinaryResponse executeCreateDatabase(OCreateDatabaseRequest request);
 
   OBinaryResponse executeClose(OCloseRequest request);
@@ -115,7 +117,7 @@ public interface OBinaryRequestExecutor {
 
   OBinaryResponse executeSubscribe(OSubscribeRequest request);
 
-  OBinaryResponse executeSubscribePushRequest(OSubscribeDistributedConfigurationRequest request);
+  OBinaryResponse executeSubscribeDistributedConfiguration(OSubscribeDistributedConfigurationRequest request);
 
   OBinaryResponse executeSubscribeLiveQuery(OSubscribeLiveQueryRequest request);
 
@@ -124,4 +126,16 @@ public interface OBinaryRequestExecutor {
   OBinaryResponse executeUnsubscribeLiveQuery(OUnsubscribeLiveQueryRequest request);
 
   OBinaryResponse executeDistributedConnect(ODistributedConnectRequest request);
+
+  OBinaryResponse executeSubscribeStorageConfiguration(OSubscribeStorageConfigurationRequest request);
+
+  OBinaryResponse executeSubscribeSchema(OSubscribeSchemaRequest request);
+
+  OBinaryResponse executeSubscribeIndexManager(OSubscribeIndexManagerRequest request);
+
+  OBinaryResponse executeSubscribeFunctions(OSubscribeFunctionsRequest request);
+
+  OBinaryResponse executeSubscribeSequences(OSubscribeSequencesRequest request);
+
+  OBinaryResponse executeExperimental(OExperimentalRequest request);
 }

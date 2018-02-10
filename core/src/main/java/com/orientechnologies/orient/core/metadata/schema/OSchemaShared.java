@@ -41,7 +41,6 @@ import com.orientechnologies.orient.core.metadata.security.ORole;
 import com.orientechnologies.orient.core.metadata.security.ORule;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OAutoshardedStorage;
-import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.OStorageProxy;
 import com.orientechnologies.orient.core.storage.impl.local.OAbstractPaginatedStorage;
 import com.orientechnologies.orient.core.type.ODocumentWrapper;
@@ -229,39 +228,6 @@ public abstract class OSchemaShared extends ODocumentWrapperNoClass implements O
 
   public abstract void checkEmbedded();
 
-  void addClusterForClass(ODatabaseDocumentInternal database, final int clusterId, final OClass cls) {
-    acquireSchemaWriteLock(database);
-    try {
-      if (clusterId < 0)
-        return;
-
-      checkEmbedded();
-
-      final OClass existingCls = clustersToClasses.get(clusterId);
-      if (existingCls != null && !cls.equals(existingCls))
-        throw new OSchemaException(
-            "Cluster with id " + clusterId + " already belongs to class " + clustersToClasses.get(clusterId));
-
-      clustersToClasses.put(clusterId, cls);
-    } finally {
-      releaseSchemaWriteLock(database);
-    }
-  }
-
-  void removeClusterForClass(ODatabaseDocumentInternal database, int clusterId, OClass cls) {
-    acquireSchemaWriteLock(database);
-    try {
-      if (clusterId < 0)
-        return;
-
-      checkEmbedded();
-
-      clustersToClasses.remove(clusterId);
-    } finally {
-      releaseSchemaWriteLock(database);
-    }
-  }
-
   void checkClusterCanBeAdded(int clusterId, OClass cls) {
     acquireSchemaReadLock();
     try {
@@ -293,7 +259,7 @@ public abstract class OSchemaShared extends ODocumentWrapperNoClass implements O
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see com.orientechnologies.orient.core.metadata.schema.OSchema#dropClass(java.lang.String)
    */
   public abstract void dropClass(ODatabaseDocumentInternal database, final String className);
@@ -327,7 +293,7 @@ public abstract class OSchemaShared extends ODocumentWrapperNoClass implements O
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see com.orientechnologies.orient.core.metadata.schema.OSchema#getClass(java.lang.Class)
    */
   public OClass getClass(final Class<?> iClass) {
@@ -339,7 +305,7 @@ public abstract class OSchemaShared extends ODocumentWrapperNoClass implements O
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see com.orientechnologies.orient.core.metadata.schema.OSchema#getClass(java.lang.String)
    */
   public OClass getClass(final String iClassName) {
@@ -378,13 +344,15 @@ public abstract class OSchemaShared extends ODocumentWrapperNoClass implements O
         // if it is embedded storage modification of schema is done by internal methods otherwise it is done by
         // by sql commands and we need to reload local replica
 
-        if (iSave)
-          if (database.getStorage().getUnderlying() instanceof OAbstractPaginatedStorage)
+        if (iSave) {
+          if (database.getStorage().getUnderlying() instanceof OAbstractPaginatedStorage) {
             saveInternal(database);
-          else
+          } else {
             reload();
-        else
+          }
+        } else {
           snapshot = new OImmutableSchema(this);
+        }
         version++;
       }
     } finally {
@@ -466,12 +434,13 @@ public abstract class OSchemaShared extends ODocumentWrapperNoClass implements O
       Collection<ODocument> storedClasses = document.field("classes");
       for (ODocument c : storedClasses) {
 
-        cls = createClassInstance(c);
-        cls.fromStream();
-
-        if (classes.containsKey(cls.getName().toLowerCase(Locale.ENGLISH))) {
-          cls = (OClassImpl) classes.get(cls.getName().toLowerCase(Locale.ENGLISH));
+        String name = c.field("name");
+        if (classes.containsKey(name.toLowerCase(Locale.ENGLISH))) {
+          cls = (OClassImpl) classes.get(name.toLowerCase(Locale.ENGLISH));
           cls.fromStream(c);
+        } else {
+          cls = createClassInstance(c);
+          cls.fromStream();
         }
 
         newClasses.put(cls.getName().toLowerCase(Locale.ENGLISH), cls);
@@ -605,10 +574,10 @@ public abstract class OSchemaShared extends ODocumentWrapperNoClass implements O
 
     rwSpinLock.acquireWriteLock();
     try {
-      if (!new ORecordId(database.getStorage().getConfiguration().schemaRecordId).isValid())
+      if (!new ORecordId(database.getStorage().getConfiguration().getSchemaRecordId()).isValid())
         throw new OSchemaNotCreatedException("Schema is not created and cannot be loaded");
 
-      ((ORecordId) document.getIdentity()).fromString(database.getStorage().getConfiguration().schemaRecordId);
+      ((ORecordId) document.getIdentity()).fromString(database.getStorage().getConfiguration().getSchemaRecordId());
       reload("*:-1 index:0");
 
       snapshot = new OImmutableSchema(this);
@@ -623,7 +592,7 @@ public abstract class OSchemaShared extends ODocumentWrapperNoClass implements O
     rwSpinLock.acquireWriteLock();
     try {
       super.save(OMetadataDefault.CLUSTER_INTERNAL_NAME);
-      database.getStorage().getConfiguration().schemaRecordId = document.getIdentity().toString();
+      database.getStorage().getConfiguration().setSchemaRecordId(document.getIdentity().toString());
       database.getStorage().getConfiguration().update();
       snapshot = new OImmutableSchema(this);
     } finally {
@@ -744,7 +713,7 @@ public abstract class OSchemaShared extends ODocumentWrapperNoClass implements O
 
     snapshot = new OImmutableSchema(this);
     for (OMetadataUpdateListener listener : database.getSharedContext().browseListeners()) {
-      listener.onSchemaUpdate(snapshot);
+      listener.onSchemaUpdate(database.getName(), this);
     }
 
   }
@@ -762,13 +731,6 @@ public abstract class OSchemaShared extends ODocumentWrapperNoClass implements O
   private void ensurePropertiesSize(int size) {
     while (properties.size() <= size)
       properties.add(null);
-  }
-
-  private static class OModificationsCounter extends ThreadLocal<OModifiableInteger> {
-    @Override
-    protected OModifiableInteger initialValue() {
-      return new OModifiableInteger(0);
-    }
   }
 
   public int addBlobCluster(ODatabaseDocumentInternal database, int clusterId) {

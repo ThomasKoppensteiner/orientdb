@@ -120,12 +120,6 @@ public class StorageNamingTests {
     }
 
     @Override
-    public OStorageOperationResult<Integer> updateRecord(ORecordId iRecordId, boolean updateContent, byte[] iContent, int iVersion,
-        byte iRecordType, int iMode, ORecordCallback<Integer> iCallback) {
-      return null;
-    }
-
-    @Override
     public OStorageOperationResult<Integer> recyclePosition(ORecordId iRecordId, byte[] iContent, int iVersion, byte iRecordType) {
       return null;
     }
@@ -147,7 +141,7 @@ public class StorageNamingTests {
     }
 
     @Override
-    public List<ORecordOperation> commit(OTransactionInternal iTx, Runnable callback) {
+    public List<ORecordOperation> commit(OTransactionInternal iTx) {
       return null;
     }
 

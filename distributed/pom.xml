@@ -46,7 +46,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <argLine>-ea
             -Xmx${heapSize}
-            -XX:MaxDirectMemorySize=512g
             -Dstorage.diskCache.bufferSize=4096
             -Dindex.flushAfterCreate=false
             -Dstorage.makeFullCheckpointAfterCreate=false
@@ -54,11 +53,12 @@
             -Dstorage.makeFullCheckpointAfterOpen=false
             -Dstorage.makeFullCheckpointAfterClusterCreate=false
             -Dstorage.wal.syncOnPageFlush=false
+            -Dserver.backwardCompatibility=false
             -Dstorage.configuration.syncOnUpdate=false
             -Ddb.makeFullCheckpointOnIndexChange=false
             -Ddb.makeFullCheckpointOnSchemaChange=false
             -Dhazelcast.wait.seconds.before.join=3
-            -Djava.util.logging.manager=com.orientechnologies.common.log.OLogManager$ShutdownLogManager
+            -Djava.util.logging.manager=com.orientechnologies.common.log.ShutdownLogManager
             -Dstorage.diskCache.checksumMode=storeAndThrow
         </argLine>
         <exclude.test.distributed>NONE</exclude.test.distributed>

@@ -1,5 +1,6 @@
 package com.orientechnologies.orient.server.network;
 
+import com.orientechnologies.common.io.OFileUtils;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.db.*;
 import com.orientechnologies.orient.core.record.OVertex;
@@ -10,6 +11,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -19,13 +21,11 @@ import static org.junit.Assert.assertNotNull;
 public class TestConcurrentCachedSequenceGenerationIT {
   static final int THREADS = 20;
   static final int RECORDS = 100;
-  private static final String SERVER_DIRECTORY = "./target/db";
   private OServer  server;
   private OrientDB orientDB;
   @Before
   public void before() throws Exception {
     server = new OServer(false);
-    server.setServerRootDirectory(SERVER_DIRECTORY);
     server.startup(getClass().getResourceAsStream("orientdb-server-config.xml"));
     server.activate();
     orientDB = new OrientDB("remote:localhost", "root", "root", OrientDBConfig.defaultConfig());
@@ -74,11 +74,9 @@ public class TestConcurrentCachedSequenceGenerationIT {
     orientDB.drop(TestConcurrentCachedSequenceGenerationIT.class.getSimpleName());
     orientDB.close();
     server.shutdown();
-  }
 
-  @AfterClass
-  public static void afterClass() {
     Orient.instance().shutdown();
+    OFileUtils.deleteRecursively(new File(server.getDatabaseDirectory()));
     Orient.instance().startup();
   }
 }

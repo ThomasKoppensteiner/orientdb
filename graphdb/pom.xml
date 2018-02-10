@@ -52,7 +52,6 @@
         <argLine>
             -ea
             -Xmx${heapSize}
-            -XX:MaxDirectMemorySize=512g
             -Dstorage.diskCache.bufferSize=4096
             -Dindex.flushAfterCreate=false
             -Dmemory.directMemory.trackMode=true
@@ -63,7 +62,7 @@
             -Dstorage.configuration.syncOnUpdate=false
             -Ddb.makeFullCheckpointOnIndexChange=false
             -Ddb.makeFullCheckpointOnSchemaChange=false
-            -Djava.util.logging.manager=com.orientechnologies.common.log.OLogManager$ShutdownLogManager
+            -Djava.util.logging.manager=com.orientechnologies.common.log.ShutdownLogManager
             -Dstorage.diskCache.checksumMode=storeAndThrow
         </argLine>
     </properties>

@@ -34,7 +34,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <argLine>-ea -Xmx${heapSize} -XX:MaxDirectMemorySize=512g -Dstorage.diskCache.bufferSize=4096
+        <argLine>-ea -Xmx${heapSize} -Dstorage.diskCache.bufferSize=4096
             -Dindex.flushAfterCreate=false
             -Dstorage.makeFullCheckpointAfterCreate=false
             -Dstorage.makeFullCheckpointAfterOpen=false
@@ -45,7 +45,7 @@
             -Ddb.makeFullCheckpointOnIndexChange=false
             -Ddb.makeFullCheckpointOnSchemaChange=false
             -Dsecurity.userPasswordSaltIterations=10
-            -Djava.util.logging.manager=com.orientechnologies.common.log.OLogManager$ShutdownLogManager
+            -Djava.util.logging.manager=com.orientechnologies.common.log.ShutdownLogManager
             -Dstorage.diskCache.checksumMode=storeAndThrow
         </argLine>
     </properties>

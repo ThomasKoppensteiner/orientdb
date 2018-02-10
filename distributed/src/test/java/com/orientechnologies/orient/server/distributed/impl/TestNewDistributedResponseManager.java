@@ -26,8 +26,8 @@ public class TestNewDistributedResponseManager {
     nodes.add("two");
     nodes.add("three");
     ONewDistributedResponseManager responseManager = new ONewDistributedResponseManager(transaction, nodes, nodes, 3, 3, 2);
-    assertFalse(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess())));
-    assertTrue(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess())));
+    assertFalse(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess()), "one"));
+    assertFalse(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess()), "two"));
     assertTrue(responseManager.isQuorumReached());
   }
 
@@ -39,10 +39,10 @@ public class TestNewDistributedResponseManager {
     nodes.add("two");
     nodes.add("three");
     ONewDistributedResponseManager responseManager = new ONewDistributedResponseManager(transaction, nodes, nodes, 3, 3, 2);
-    assertFalse(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess())));
-    assertFalse(
-        responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxConcurrentModification(new ORecordId(1, 1), 1))));
-    assertTrue(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxLockTimeout())));
+    assertFalse(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess()), "one"));
+    assertFalse(responseManager
+        .collectResponse(new OTransactionPhase1TaskResult(new OTxConcurrentModification(new ORecordId(1, 1), 1)), "two"));
+    assertTrue(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxLockTimeout()), "two"));
     assertFalse(responseManager.isQuorumReached());
   }
 
@@ -55,7 +55,21 @@ public class TestNewDistributedResponseManager {
     nodes.add("three");
     ONewDistributedResponseManager responseManager = new ONewDistributedResponseManager(transaction, nodes, nodes, 3, 3, 2);
     assertFalse(responseManager.setLocalResult("one", new OTxSuccess()));
-    assertTrue(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess())));
+    assertFalse(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess()), "three"));
+    assertTrue(responseManager.isQuorumReached());
+  }
+
+  @Test
+  public void testSimpleFinishLocal() {
+    OTransactionPhase1Task transaction = new OTransactionPhase1Task();
+    Set<String> nodes = new HashSet<>();
+    nodes.add("one");
+    nodes.add("two");
+    nodes.add("three");
+    ONewDistributedResponseManager responseManager = new ONewDistributedResponseManager(transaction, nodes, nodes, 3, 3, 2);
+    assertFalse(responseManager.setLocalResult("one", new OTxSuccess()));
+    assertFalse(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess()), "two"));
+    assertTrue(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess()), "three"));
     assertTrue(responseManager.isQuorumReached());
   }
 
@@ -77,7 +91,7 @@ public class TestNewDistributedResponseManager {
     });
     startedWaiting.await();
     assertFalse(future.isDone());
-    responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess()));
+    responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess()), "one");
     assertTrue(future.get());
     assertTrue(responseManager.isQuorumReached());
   }
@@ -92,9 +106,9 @@ public class TestNewDistributedResponseManager {
     nodes.add("two");
     nodes.add("three");
     ONewDistributedResponseManager responseManager = new ONewDistributedResponseManager(transaction, nodes, nodes, 3, 3, 2);
-    responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess()));
-    assertFalse(
-        responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxConcurrentModification(new ORecordId(1, 1), 1))));
+    responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxSuccess()), "one");
+    assertFalse(responseManager
+        .collectResponse(new OTransactionPhase1TaskResult(new OTxConcurrentModification(new ORecordId(1, 1), 1)), "two"));
     CountDownLatch startedWaiting = new CountDownLatch(1);
     Future<Boolean> future = executor.submit(() -> {
       startedWaiting.countDown();
@@ -102,8 +116,8 @@ public class TestNewDistributedResponseManager {
     });
     startedWaiting.await();
     assertFalse(future.isDone());
-    assertTrue(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxLockTimeout())));
-    assertTrue(future.get());
+    assertTrue(responseManager.collectResponse(new OTransactionPhase1TaskResult(new OTxLockTimeout()), "one"));
+    assertFalse(future.get());
     assertFalse(responseManager.isQuorumReached());
   }
 

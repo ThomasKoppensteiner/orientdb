@@ -75,7 +75,7 @@ public class ODistributedTransactionManager {
     this.localDistributedDatabase = iDDatabase;
   }
 
-  public List<ORecordOperation> commit(final ODatabaseDocumentInternal database, final OTransactionInternal iTx, final Runnable callback,
+  public List<ORecordOperation> commit(final ODatabaseDocumentInternal database, final OTransactionInternal iTx,
       final ODistributedStorageEventListener eventListener) {
     final String localNodeName = dManager.getLocalNodeName();
 
@@ -113,7 +113,7 @@ public class ODistributedTransactionManager {
         final List<ORecordOperation> uResult = (List<ORecordOperation>) OScenarioThreadLocal.executeAsDistributed(new Callable() {
           @Override
           public Object call() throws Exception {
-            return storage.commit(iTx, callback);
+            return storage.commit(iTx);
           }
         });
 
@@ -276,7 +276,8 @@ public class ODistributedTransactionManager {
     return null;
   }
 
-  protected void checkForClusterIds(final OTransactionInternal iTx, final String localNodeName, final ODistributedConfiguration dbCfg) {
+  protected void checkForClusterIds(final OTransactionInternal iTx, final String localNodeName,
+      final ODistributedConfiguration dbCfg) {
     for (ORecordOperation op : iTx.getRecordOperations()) {
       final ORecordId rid = (ORecordId) op.getRecord().getIdentity();
       switch (op.type) {
@@ -633,7 +634,8 @@ public class ODistributedTransactionManager {
               final ORawBuffer loadedBuffer = database.getRecordIfLocked(rid);
               if (loadedBuffer != null) {
                 // LOAD THE RECORD FROM THE STORAGE AVOIDING USING THE DB TO GET THE TRANSACTIONAL CHANGES
-                record = Orient.instance().getRecordFactoryManager().newInstance(loadedBuffer.recordType);
+                record = Orient.instance().getRecordFactoryManager()
+                    .newInstance(loadedBuffer.recordType, rid.getClusterId(), ODatabaseRecordThreadLocal.instance().get());
                 ORecordInternal.fill(record, rid, loadedBuffer.version, loadedBuffer.getBuffer(), false);
                 previousRecord.set(record);
               } else

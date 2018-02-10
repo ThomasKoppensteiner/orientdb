@@ -22,10 +22,10 @@ public class OResultInternal implements OResult {
   protected Map<String, Object> metadata;
   protected OIdentifiable       element;
 
-  public OResultInternal(){
+  public OResultInternal() {
   }
 
-  public OResultInternal(OIdentifiable ident){
+  public OResultInternal(OIdentifiable ident) {
     this.element = ident;
   }
 
@@ -46,12 +46,95 @@ public class OResultInternal implements OResult {
 
   public <T> T getProperty(String name) {
     if (content.containsKey(name)) {
-      return (T) content.get(name);
+      return (T) wrap(content.get(name));
     }
     if (element != null) {
-      return ((ODocument) element.getRecord()).getProperty(name);
+      return (T) wrap(((ODocument) element.getRecord()).getProperty(name));
     }
     return null;
+  }
+
+  private Object wrap(Object input) {
+    if (input instanceof OElement && !((OElement) input).getIdentity().isValid()) {
+      OResultInternal result = new OResultInternal();
+      OElement elem = (OElement) input;
+      for (String prop : elem.getPropertyNames()) {
+        result.setProperty(prop, elem.getProperty(prop));
+      }
+      elem.getSchemaType().ifPresent(x -> result.setProperty("@class", x.getName()));
+      return result;
+    } else if (isEmbeddedList(input)) {
+      return ((List) input).stream().map(this::wrap).collect(Collectors.toList());
+    } else if (isEmbeddedSet(input)) {
+      return ((Set) input).stream().map(this::wrap).collect(Collectors.toSet());
+    } else if (isEmbeddedMap(input)) {
+      Map result = new HashMap();
+      for (Map.Entry<Object, Object> o : ((Map<Object, Object>) input).entrySet()) {
+        result.put(o.getKey(), wrap(o.getValue()));
+      }
+      return result;
+    }
+    return input;
+  }
+
+  private boolean isEmbeddedSet(Object input) {
+    if (input instanceof Set) {
+      for (Object o : (Set) input) {
+        if (o instanceof OElement && !((OElement) o).getIdentity().isPersistent()) {
+          return true;
+        }
+        if (isEmbeddedList(o)) {
+          return true;
+        }
+        if (isEmbeddedSet(o)) {
+          return true;
+        }
+        if (isEmbeddedMap(o)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private boolean isEmbeddedMap(Object input) {
+    if (input instanceof Map) {
+      for (Object o : ((Map) input).values()) {
+        if (o instanceof OElement && !((OElement) o).getIdentity().isPersistent()) {
+          return true;
+        }
+        if (isEmbeddedList(o)) {
+          return true;
+        }
+        if (isEmbeddedSet(o)) {
+          return true;
+        }
+        if (isEmbeddedMap(o)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private boolean isEmbeddedList(Object input) {
+    if (input instanceof List) {
+      for (Object o : (List) input) {
+        if (o instanceof OElement && !((OElement) o).getIdentity().isPersistent()) {
+          return true;
+        }
+        if (isEmbeddedList(o)) {
+          return true;
+        }
+        if (isEmbeddedSet(o)) {
+          return true;
+        }
+        if (isEmbeddedMap(o)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   public Set<String> getPropertyNames() {
@@ -61,6 +144,13 @@ public class OResultInternal implements OResult {
     }
     result.addAll(content.keySet());
     return result;
+  }
+
+  public boolean hasProperty(String propName) {
+    if (element != null && ((ODocument) element.getRecord()).containsField(propName)) {
+      return true;
+    }
+    return content.keySet().contains(propName);
   }
 
   @Override
@@ -203,6 +293,14 @@ public class OResultInternal implements OResult {
       return ((Set) property).stream().map(x -> convertToElement(x)).collect(Collectors.toSet());
     }
 
+    if (property instanceof Map) {
+      Map<Object, Object> result = new HashMap<>();
+      Map<Object, Object> prop = ((Map) property);
+      for (Map.Entry<Object, Object> o : prop.entrySet()) {
+        result.put(o.getKey(), convertToElement(o.getValue()));
+      }
+    }
+
     return property;
   }
 
@@ -266,13 +364,7 @@ public class OResultInternal implements OResult {
         if (!cached.isDirty()) {
           cached.fromStream(rec.toStream());
         }
-        if (element instanceof OVertex) {
-          element = new OVertexDelegate((ODocument) cached);
-        } else if (element instanceof OEdge) {
-          element = new OEdgeDelegate((ODocument) cached);
-        } else {
-          element = cached;
-        }
+        element = cached;
       } else {
         db.getLocalCache().updateRecord(rec);
       }

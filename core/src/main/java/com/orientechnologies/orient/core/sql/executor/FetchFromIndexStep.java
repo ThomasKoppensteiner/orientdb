@@ -62,7 +62,13 @@ public class FetchFromIndexStep extends AbstractExecutionStep {
 
       @Override
       public boolean hasNext() {
-        return (localCount < nRecords && nextEntry != null);
+        if (localCount >= nRecords) {
+          return false;
+        }
+        if (nextEntry == null) {
+          fetchNextEntry();
+        }
+        return nextEntry != null;
       }
 
       @Override
@@ -72,19 +78,22 @@ public class FetchFromIndexStep extends AbstractExecutionStep {
         }
         long begin = profilingEnabled ? System.nanoTime() : 0;
         try {
-          Map.Entry<Object, OIdentifiable> currentEntry = nextEntry;
-          fetchNextEntry();
+          Object key = nextEntry.getKey();
+          OIdentifiable value = nextEntry.getValue();
+
+          nextEntry = null;
 
           localCount++;
           OResultInternal result = new OResultInternal();
-          result.setProperty("key", currentEntry.getKey());
-          result.setProperty("rid", currentEntry.getValue());
+          result.setProperty("key", key);
+          result.setProperty("rid", value);
           ctx.setVariable("$current", result);
           return result;
         } finally {
           if (profilingEnabled) {
             cost += (System.nanoTime() - begin);
           }
+
         }
       }
 
